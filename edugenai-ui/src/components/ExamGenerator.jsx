@@ -6,7 +6,9 @@ import {
     FormControl,
     InputLabel,
     Select,
-    MenuItem
+    MenuItem,
+    FormControlLabel,
+    Checkbox
 } from '@mui/material';
 
 export default function ExamGenerator() {
@@ -64,6 +66,21 @@ export default function ExamGenerator() {
                     <MenuItem value="Hard">Hard</MenuItem>
                 </Select>
             </FormControl>
+            <FormControlLabel
+                control={<Checkbox defaultChecked/>}
+                label="Multiple Choice"
+                sx={{mb:2}}
+                />
+            <FormControlLabel
+                control={<Checkbox defaultChecked/> }
+                label="Short Answer"
+                sx={{mb:2}}
+                />
+            <FormControlLabel
+                control={<Checkbox/>}
+                label="Essay"
+                sx={{mb:3}}
+                />
 
             <Button
                 variant="contained"
