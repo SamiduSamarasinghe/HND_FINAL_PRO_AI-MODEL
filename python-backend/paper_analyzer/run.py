@@ -3,6 +3,7 @@ import sys
 import subprocess
 import app.config.server_config as config
 
+#check and install packages 
 def ensure_packages(packages):
     for pkg in packages:
         try:
