@@ -19,5 +19,5 @@ async def upload_file(isPaper: bool ,file: UploadFile = File(...)):
             results = await process_pdf(isPaper,file)
             return {"Filename:":file.filename, "message":results}        
                 
-    except Error as error:
+    except Exception as error:
         return f"Reading Failed: {(error)}"
