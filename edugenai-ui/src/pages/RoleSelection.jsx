@@ -37,7 +37,7 @@ const RoleSelection = () => {
                     mb: 4,
                     color: theme.palette.primary.main
                 }}>
-                    ExamPrep AI
+                    EduGen-AI
                 </Typography>
 
                 <Typography variant="h5" gutterBottom sx={{
