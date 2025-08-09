@@ -4,6 +4,7 @@ import StudentDashboard from './pages/StudentDashboard';
 import TeacherDashboard from './pages/TeacherDashboard';
 import Login from './pages/Login';
 import UploadPapers from './pages/UploadPapers';
+import MockTest from './pages/MockTest';
 
 function App() {
     return (
@@ -14,6 +15,7 @@ function App() {
                 <Route path="/student" element={<StudentDashboard />} />
                 <Route path="/teacher" element={<TeacherDashboard />} />
                 <Route path="/upload-papers" element={<UploadPapers />} />
+                <Route path="/generate-test" element={<MockTest />} />
             </Routes>
         </BrowserRouter>
     );

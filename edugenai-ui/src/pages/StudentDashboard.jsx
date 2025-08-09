@@ -345,6 +345,7 @@ const StudentDashboard = () => {
                                                 borderColor: 'primary.main'
                                             }
                                         }}
+                                        onClick={() => navigate('/generate-test')} // Add this line
                                     >
                                         Generate Mock Test
                                     </Button>
