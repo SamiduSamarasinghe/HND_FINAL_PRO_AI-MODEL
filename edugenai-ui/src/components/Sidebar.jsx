@@ -8,8 +8,11 @@ import {
     Chat as ChatIcon,
     Settings as SettingsIcon
 } from '@mui/icons-material';
+import {useNavigate} from "react-router-dom";
 
 const Sidebar = () => {
+    const navigate = useNavigate();
+
     const menuItems = [
         { text: 'Dashboard', icon: <DashboardIcon /> },
         { text: 'Question Bank', icon: <LibraryBooksIcon /> },
@@ -40,6 +43,14 @@ const Sidebar = () => {
                     </ListItem>
                 ))}
             </List>
+            <ListItem
+                button
+                key="upload"
+                onClick={() => navigate('/upload-papers')} // Add useNavigate hook at the top
+            >
+                <ListItemIcon><UploadIcon /></ListItemIcon>
+                <ListItemText primary="Upload Papers" />
+            </ListItem>
         </Drawer>
     );
 };

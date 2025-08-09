@@ -3,6 +3,7 @@ import RoleSelection from './pages/RoleSelection';
 import StudentDashboard from './pages/StudentDashboard';
 import TeacherDashboard from './pages/TeacherDashboard';
 import Login from './pages/Login';
+import UploadPapers from './pages/UploadPapers';
 
 function App() {
     return (
@@ -12,6 +13,7 @@ function App() {
                 <Route path="/select-role" element={<RoleSelection />} />
                 <Route path="/student" element={<StudentDashboard />} />
                 <Route path="/teacher" element={<TeacherDashboard />} />
+                <Route path="/upload-papers" element={<UploadPapers />} />
             </Routes>
         </BrowserRouter>
     );

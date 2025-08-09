@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
     Box,
     Typography,
@@ -35,6 +36,7 @@ import {
 const StudentDashboard = () => {
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const [activeTab, setActiveTab] = useState('recentPapers');
+    const navigate = useNavigate();
 
     const studentData = {
         name: "Sarah",
@@ -88,17 +90,22 @@ const StudentDashboard = () => {
                 </Box>
                 <Divider />
                 <List>
-                    {['Dashboard', 'Question Bank', 'Upload Papers', 'Generate Test', 'Analytics', 'AI Tutor'].map((text, index) => (
-                        <ListItem button key={text} sx={{ borderRadius: 1, mx: 1, my: 0.5 }}>
-                            <ListItemIcon>
-                                {index === 0 && <MenuIcon />}
-                                {index === 1 && <PaperIcon />}
-                                {index === 2 && <UploadIcon />}
-                                {index === 3 && <GenerateIcon />}
-                                {index === 4 && <AnalyticsIcon />}
-                                {index === 5 && <TutorIcon />}
-                            </ListItemIcon>
-                            <ListItemText primary={text} />
+                    {[
+                        { text: 'Dashboard', icon: <MenuIcon />, path: '/student' },
+                        { text: 'Question Bank', icon: <PaperIcon /> },
+                        { text: 'Upload Papers', icon: <UploadIcon />, path: '/upload-papers' },
+                        { text: 'Generate Test', icon: <GenerateIcon /> },
+                        { text: 'Analytics', icon: <AnalyticsIcon /> },
+                        { text: 'AI Tutor', icon: <TutorIcon /> }
+                    ].map((item, index) => (
+                        <ListItem
+                            button
+                            key={item.text}
+                            sx={{ borderRadius: 1, mx: 1, my: 0.5 }}
+                            onClick={() => item.path && navigate(item.path)}
+                        >
+                            <ListItemIcon>{item.icon}</ListItemIcon>
+                            <ListItemText primary={item.text} />
                         </ListItem>
                     ))}
                 </List>
@@ -123,7 +130,8 @@ const StudentDashboard = () => {
                 {/* Stats Cards */}
                 <Grid container spacing={3} sx={{ mb: 4 }}>
                     {[
-                        { icon: <MockTestIcon sx={{ fontSize: 40 }} />, title: "Task Questions", value: studentData.taskQuestions },                        { icon: <PaperIcon sx={{ fontSize: 40 }} />, title: "Papers Analyzed", value: studentData.papersAnalyzed },
+                        { icon: <MockTestIcon sx={{ fontSize: 40 }} />, title: "Task Questions", value: studentData.taskQuestions },
+                        { icon: <PaperIcon sx={{ fontSize: 40 }} />, title: "Papers Analyzed", value: studentData.papersAnalyzed },
                         { icon: <AnalyticsIcon sx={{ fontSize: 40 }} />, title: "Mock Tests", value: studentData.mockTests },
                         { icon: <StreakIcon sx={{ fontSize: 40 }} />, title: "Study Streak", value: `${studentData.studyStreak} days` }
                     ].map((stat, index) => (
@@ -301,32 +309,64 @@ const StudentDashboard = () => {
                                     Quick Actions
                                 </Typography>
                                 <Stack spacing={2}>
-                                    {[
-                                        { icon: <UploadIcon />, text: "Upload New Paper" },
-                                        { icon: <GenerateIcon />, text: "Generate Mock Test" },
-                                        { icon: <ViewIcon />, text: "View Analytics" }
-                                    ].map((action, index) => (
-                                        <Button
-                                            key={index}
-                                            variant="outlined"
-                                            fullWidth
-                                            startIcon={action.icon}
-                                            sx={{
-                                                py: 1.5,
-                                                borderRadius: 2,
-                                                border: '1px solid #e0e0e0',
-                                                justifyContent: 'flex-start',
-                                                textTransform: 'none',
-                                                '&:hover': {
-                                                    bgcolor: 'primary.main',
-                                                    color: 'white',
-                                                    borderColor: 'primary.main'
-                                                }
-                                            }}
-                                        >
-                                            {action.text}
-                                        </Button>
-                                    ))}
+                                    <Button
+                                        variant="outlined"
+                                        fullWidth
+                                        startIcon={<UploadIcon />}
+                                        sx={{
+                                            py: 1.5,
+                                            borderRadius: 2,
+                                            border: '1px solid #e0e0e0',
+                                            justifyContent: 'flex-start',
+                                            textTransform: 'none',
+                                            '&:hover': {
+                                                bgcolor: 'primary.main',
+                                                color: 'white',
+                                                borderColor: 'primary.main'
+                                            }
+                                        }}
+                                        onClick={() => navigate('/upload-papers')}
+                                    >
+                                        Upload New Paper
+                                    </Button>
+                                    <Button
+                                        variant="outlined"
+                                        fullWidth
+                                        startIcon={<GenerateIcon />}
+                                        sx={{
+                                            py: 1.5,
+                                            borderRadius: 2,
+                                            border: '1px solid #e0e0e0',
+                                            justifyContent: 'flex-start',
+                                            textTransform: 'none',
+                                            '&:hover': {
+                                                bgcolor: 'primary.main',
+                                                color: 'white',
+                                                borderColor: 'primary.main'
+                                            }
+                                        }}
+                                    >
+                                        Generate Mock Test
+                                    </Button>
+                                    <Button
+                                        variant="outlined"
+                                        fullWidth
+                                        startIcon={<ViewIcon />}
+                                        sx={{
+                                            py: 1.5,
+                                            borderRadius: 2,
+                                            border: '1px solid #e0e0e0',
+                                            justifyContent: 'flex-start',
+                                            textTransform: 'none',
+                                            '&:hover': {
+                                                bgcolor: 'primary.main',
+                                                color: 'white',
+                                                borderColor: 'primary.main'
+                                            }
+                                        }}
+                                    >
+                                        View Analytics
+                                    </Button>
                                 </Stack>
                             </CardContent>
                         </Card>
