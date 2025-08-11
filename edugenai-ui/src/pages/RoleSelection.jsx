@@ -24,13 +24,32 @@ const RoleSelection = () => {
             alignItems: 'center',
             justifyContent: 'center',
             bgcolor: '#f8f9fa',
-            p: 2
+            p: 2,
+
+            backkgroundImage: 'url(pngtree-online-education-3d-render-of-a-computer-on-a-wooden-table-image_3792188.jpg)',
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat',
+            // Optional overlay to improve text readability:
+            position: 'relative',
+            '&::before': {
+                content: '""',
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundColor: 'rgba(255, 255, 255, 0.7)', // White overlay with 70% opacity
+                zIndex: 0
+            }
         }}>
             <Container maxWidth="md" sx={{
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
-                textAlign: 'center'
+                textAlign: 'center',
+                position: 'relative',
+                zIndex: 1
             }}>
                 <Typography variant="h3" gutterBottom sx={{
                     fontWeight: 'bold',
