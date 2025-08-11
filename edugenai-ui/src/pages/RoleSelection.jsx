@@ -2,11 +2,13 @@ import React from 'react';
 import { Box, Button, Typography, Container, useTheme } from '@mui/material';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
 import SchoolIcon from '@mui/icons-material/School';
-import { useNavigate } from 'react-router-dom'; // Add this import
+import { useNavigate } from 'react-router-dom';
+import backgroundImage from '../assets/pngtree-d-render-of-student-workspace-with-laptop-and-stationery-on-wooden-picture-image_5828445.jpg';
 
 const RoleSelection = () => {
     const theme = useTheme();
-    const navigate = useNavigate(); // Add this hook
+    const navigate = useNavigate();
+    // Add this hook
 
     // Add click handlers
     const handleStudentClick = () => {
@@ -26,7 +28,7 @@ const RoleSelection = () => {
             bgcolor: '#f8f9fa',
             p: 2,
 
-            backkgroundImage: 'url(pngtree-online-education-3d-render-of-a-computer-on-a-wooden-table-image_3792188.jpg)',
+            backgroundImage: `url(${backgroundImage})`,
             backgroundSize: 'cover',
             backgroundPosition: 'center',
             backgroundRepeat: 'no-repeat',
@@ -39,7 +41,6 @@ const RoleSelection = () => {
                 left: 0,
                 right: 0,
                 bottom: 0,
-                backgroundColor: 'rgba(255, 255, 255, 0.7)', // White overlay with 70% opacity
                 zIndex: 0
             }
         }}>
