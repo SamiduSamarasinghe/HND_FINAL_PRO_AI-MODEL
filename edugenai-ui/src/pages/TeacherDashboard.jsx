@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
     Box,
     Typography,
@@ -38,6 +39,8 @@ import {
 const TeacherDashboard = () => {
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const [activeTab, setActiveTab] = useState('recentPapers');
+    const navigate = useNavigate();
+
 
     const teacherData = {
         name: "Dr. Martinez",
@@ -107,16 +110,16 @@ const TeacherDashboard = () => {
                 <Divider />
                 <List>
                     {[
-                        { text: 'Dashboard', icon: <MenuIcon /> },
-                        { text: 'My Classes', icon: <ClassIcon /> },
+                        {/* text: 'Dashboard', icon: <MenuIcon /> },
+                        { text: 'My Classes', icon: <ClassIcon /> */},
                         { text: 'Question Bank', icon: <QuestionsIcon /> },
-                        { text: 'Create Paper', icon: <CreateIcon /> },
+                        { text: 'Create Paper', icon: <CreateIcon />, path: '/create-exam' },
                         { text: 'Upload Papers', icon: <UploadIcon /> },
                         { text: 'Analytics', icon: <AnalyticsIcon /> },
-                        { text: 'Student Progress', icon: <ManageClassesIcon /> },
                         { text: 'AI Assistant', icon: <AssistantIcon /> },
-                        { text: 'Profile', icon: <ManageAccountsIcon /> },
-                        { text: 'Settings', icon: <ManageAccountsIcon /> }
+                        { /*text: 'Student Progress', icon: <ManageClassesIcon /> */},
+                        {/* text: 'Profile', icon: <ManageAccountsIcon /> },
+                        { text: 'Settings', icon: <ManageAccountsIcon /> */}
                     ].map((item, index) => (
                         <ListItem button key={index} sx={{ borderRadius: 3, mx: 1, my: 0.5 }}>
                             <ListItemIcon>{item.icon}</ListItemIcon>
@@ -354,16 +357,33 @@ const TeacherDashboard = () => {
                                 </Typography>
                                 <Stack spacing={2}>
                                     {[
-                                        { icon: <CreateIcon />, text: "Create New Paper" },
-                                        { icon: <UploadIcon />, text: "Upload Questions" },
-                                        { icon: <ManageClassesIcon />, text: "Manage Classes" },
-                                        { icon: <AnalyticsIcon />, text: "View Analytics" }
+                                        {
+                                            icon: <CreateIcon />,
+                                            text: "Create New Paper",
+                                            action: () => navigate('/create-exam')
+                                        },
+                                        {
+                                            icon: <UploadIcon />,
+                                            text: "Upload Questions",
+                                            action: () => navigate('/upload-questions')
+                                        },
+                                        {
+                                            icon: <ManageClassesIcon />,
+                                            text: "Manage Classes",
+                                            action: () => navigate('/manage-classes')
+                                        },
+                                        {
+                                            icon: <AnalyticsIcon />,
+                                            text: "View Analytics",
+                                            action: () => navigate('/analytics')
+                                        }
                                     ].map((action, index) => (
                                         <Button
                                             key={index}
                                             variant="outlined"
                                             fullWidth
                                             startIcon={action.icon}
+                                            onClick={action.action}
                                             sx={{
                                                 py: 1.5,
                                                 borderRadius: 3,
