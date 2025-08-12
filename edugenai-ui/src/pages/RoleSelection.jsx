@@ -2,11 +2,13 @@ import React from 'react';
 import { Box, Button, Typography, Container, useTheme } from '@mui/material';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
 import SchoolIcon from '@mui/icons-material/School';
-import { useNavigate } from 'react-router-dom'; // Add this import
+import { useNavigate } from 'react-router-dom';
+import backgroundImage from '../assets/pngtree-d-render-of-student-workspace-with-laptop-and-stationery-on-wooden-picture-image_5828445.jpg';
 
 const RoleSelection = () => {
     const theme = useTheme();
-    const navigate = useNavigate(); // Add this hook
+    const navigate = useNavigate();
+    // Add this hook
 
     // Add click handlers
     const handleStudentClick = () => {
@@ -24,20 +26,38 @@ const RoleSelection = () => {
             alignItems: 'center',
             justifyContent: 'center',
             bgcolor: '#f8f9fa',
-            p: 2
+            p: 2,
+
+            backgroundImage: `url(${backgroundImage})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat',
+            // Optional overlay to improve text readability:
+            position: 'relative',
+            '&::before': {
+                content: '""',
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                zIndex: 0
+            }
         }}>
             <Container maxWidth="md" sx={{
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
-                textAlign: 'center'
+                textAlign: 'center',
+                position: 'relative',
+                zIndex: 1
             }}>
                 <Typography variant="h3" gutterBottom sx={{
                     fontWeight: 'bold',
                     mb: 4,
                     color: theme.palette.primary.main
                 }}>
-                    ExamPrep AI
+                    EduGen-AI
                 </Typography>
 
                 <Typography variant="h5" gutterBottom sx={{
