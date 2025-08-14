@@ -112,7 +112,7 @@ const TeacherDashboard = () => {
                     {[
                         {/* text: 'Dashboard', icon: <MenuIcon /> },
                         { text: 'My Classes', icon: <ClassIcon /> */},
-                        { text: 'Question Bank', icon: <QuestionsIcon /> },
+                        { text: 'Question Bank', icon: <QuestionsIcon />, path: '/question-bank' },
                         { text: 'Create Paper', icon: <CreateIcon />, path: '/create-exam' },
                         { text: 'Upload Papers', icon: <UploadIcon /> },
                         { text: 'Analytics', icon: <AnalyticsIcon /> },
@@ -121,7 +121,12 @@ const TeacherDashboard = () => {
                         {/* text: 'Profile', icon: <ManageAccountsIcon /> },
                         { text: 'Settings', icon: <ManageAccountsIcon /> */}
                     ].map((item, index) => (
-                        <ListItem button key={index} sx={{ borderRadius: 3, mx: 1, my: 0.5 }}>
+                        <ListItem
+                            button
+                            key={index}
+                            sx={{ borderRadius: 3, mx: 1, my: 0.5 }}
+                            onClick={() => item.path && navigate(item.path)}
+                        >
                             <ListItemIcon>{item.icon}</ListItemIcon>
                             <ListItemText primary={item.text} />
                         </ListItem>
