@@ -28,6 +28,7 @@ import {
     Quiz as QuizIcon,
     School as SchoolIcon
 } from '@mui/icons-material';
+import backgroundImage from '../assets/pngtree-home-based-e-learning-and-online-education-in-a-3d-illustration-picture-image_7253729.jpg';
 
 
 const TeacherQuestionBank = () => {
@@ -109,7 +110,24 @@ const TeacherQuestionBank = () => {
 
     return (
         <Box sx={{
-            p: 3
+            p: 3,
+            minHeight: '100vh',
+            // Background with controlled opacity
+            position: 'relative',
+            '&::before': {
+                content: '""',
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundImage: `url(${backgroundImage})`,
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+                backgroundAttachment: 'fixed',
+                opacity: 0.15, // Adjust this value (0.1 to 0.3 works well)
+                zIndex: -1
+            }
         }}>
             {/* Header */}
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
