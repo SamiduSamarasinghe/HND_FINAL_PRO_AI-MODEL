@@ -86,8 +86,28 @@ const TeacherUploadQuestions = () => {
     const navigate = useNavigate();
 
     return (
+        <Box sx={{ p: 3,
+            minHeight: '100vh',
+            // Background with controlled opacity
+            position: 'relative',
+            '&::before': {
+                content: '""',
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundImage: `url(${backgroundImage})`,
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+                backgroundAttachment: 'fixed',
+                opacity: 0.25, // Adjust this value (0.1 to 0.3 works well)
+                zIndex: -1
+            }
 
-            <Box sx={{p: 3,
+        }}>
+            {/*content container*/}
+            <Box sx={{
                 maxWidth: 800,
                 margin: '0 auto',
                 position: 'relative',
