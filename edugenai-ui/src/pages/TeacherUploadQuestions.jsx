@@ -44,7 +44,8 @@ const TeacherUploadQuestions = () => {
         image: null
     });
 
-
+    const [aiSuggestions, setAiSuggestions] = useState(null);
+    const [expanded, setExpanded] = useState(false);
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -75,7 +76,16 @@ const TeacherUploadQuestions = () => {
         setQuestion(prev => ({ ...prev, image: e.target.files[0] }));
     };
 
-
+    const analyzeQuestion = () => {
+        // Simulate AI analysis
+        setAiSuggestions({
+            topic: 'Derivatives',
+            subject: 'Mathematics',
+            difficulty: 3,
+            confidence: 85
+        });
+        setExpanded(true);
+    };
 
     const handleSubmit = () => {
         console.log('Question submitted:', question);
@@ -193,7 +203,49 @@ const TeacherUploadQuestions = () => {
                     )}
 
                     {/* AI Suggestions */}
-
+                    <Accordion expanded={expanded} onChange={() => setExpanded(!expanded)}>
+                        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                            <Typography>AI Suggestions</Typography>
+                            {aiSuggestions && (
+                                <Chip
+                                    label={`${aiSuggestions.confidence}% confidence`}
+                                    size="small"
+                                    sx={{ ml: 2 }}
+                                />
+                            )}
+                        </AccordionSummary>
+                        <AccordionDetails>
+                            {aiSuggestions ? (
+                                <Stack spacing={2}>
+                                    <Stack direction="row" spacing={2} alignItems="center">
+                                        <Typography>Subject:</Typography>
+                                        <Chip label={aiSuggestions.subject} />
+                                        <Typography>Topic:</Typography>
+                                        <Chip label={aiSuggestions.topic} />
+                                    </Stack>
+                                    <Stack direction="row" spacing={2} alignItems="center">
+                                        <Typography>Difficulty:</Typography>
+                                        <Slider
+                                            value={question.difficulty}
+                                            onChange={(e, val) => setQuestion(prev => ({ ...prev, difficulty: val }))}
+                                            min={1}
+                                            max={5}
+                                            marks={[
+                                                { value: 1, label: 'Easy' },
+                                                { value: 3, label: 'Medium' },
+                                                { value: 5, label: 'Hard' }
+                                            ]}
+                                            sx={{ width: 200 }}
+                                        />
+                                    </Stack>
+                                </Stack>
+                            ) : (
+                                <Typography color="text.secondary">
+                                    Start typing your question to get AI suggestions
+                                </Typography>
+                            )}
+                        </AccordionDetails>
+                    </Accordion>
 
                     {/* Image Upload */}
                     <Box sx={{ mt: 3, mb: 3 }}>
