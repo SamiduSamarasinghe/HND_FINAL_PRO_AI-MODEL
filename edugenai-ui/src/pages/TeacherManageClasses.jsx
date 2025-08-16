@@ -37,17 +37,23 @@ import {
     PersonAdd as AddStudentIcon,
     Search as SearchIcon
 } from '@mui/icons-material';
+import { useNavigate } from 'react-router-dom';
 
 const TeacherManageClasses = () => {
     const [activeTab, setActiveTab] = useState('classes');
+    const [openDialog, setOpenDialog] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
-
+    const [newClass, setNewClass] = useState({
+        name: '',
+        subject: 'Mathematics',
+        gradeLevel: '10'
+    });
 
     // Sample data
     const classes = [
         {
             id: 1,
-            name: 'Mathematics 101',s
+            name: 'Mathematics 101',
             subject: 'Mathematics',
             gradeLevel: '10',
             students: 32,
@@ -84,7 +90,12 @@ const TeacherManageClasses = () => {
         setActiveTab(newValue);
     };
 
-
+    const handleCreateClass = () => {
+        console.log('Creating new class:', newClass);
+        // In real app, this would call an API
+        setOpenDialog(false);
+        setNewClass({ name: '', subject: 'Mathematics', gradeLevel: '10' });
+    };
 
     const handleAssignExam = (classId) => {
         console.log('Assigning exam to class:', classId);
@@ -182,8 +193,113 @@ const TeacherManageClasses = () => {
                 </Grid>
             )}
 
+            {activeTab === 'exams' && (
+                <Card variant="outlined">
+                    <CardContent>
+                        <List>
+                            {exams.map((exam) => (
+                                <ListItem
+                                    key={exam.id}
+                                    secondaryAction={
+                                        <FormControl size="small" sx={{ minWidth: 180 }}>
+                                            <InputLabel>Assign to Class</InputLabel>
+                                            <Select label="Assign to Class">
+                                                {classes.map((cls) => (
+                                                    <MenuItem key={cls.id} value={cls.id}>
+                                                        {cls.name}
+                                                    </MenuItem>
+                                                ))}
+                                            </Select>
+                                        </FormControl>
+                                    }
+                                >
+                                    <ListItemText
+                                        primary={exam.title}
+                                        secondary={`${exam.date} • ${exam.class}`}
+                                    />
+                                </ListItem>
+                            ))}
+                        </List>
+                    </CardContent>
+                </Card>
+            )}
 
+            {activeTab === 'analytics' && (
+                <Card variant="outlined">
+                    <CardContent>
+                        <Typography variant="h6" gutterBottom>
+                            Class Performance Overview
+                        </Typography>
+                        <Grid container spacing={3}>
+                            {classes.map((cls) => (
+                                <Grid item xs={12} md={6} key={cls.id}>
+                                    <Paper sx={{ p: 2 }}>
+                                        <Typography variant="subtitle1" gutterBottom>
+                                            {cls.name}
+                                        </Typography>
+                                        <Typography color="text.secondary" gutterBottom>
+                                            Weak Areas: Algebra (32% miss rate), Geometry (28% miss rate)
+                                        </Typography>
+                                        <Button size="small" startIcon={<AnalyticsIcon />}>
+                                            View Detailed Analytics
+                                        </Button>
+                                    </Paper>
+                                </Grid>
+                            ))}
+                        </Grid>
+                    </CardContent>
+                </Card>
+            )}
 
+            {/* New Class Dialog */}
+            <Dialog open={openDialog} onClose={() => setOpenDialog(false)}>
+                <DialogTitle>Create New Class</DialogTitle>
+                <DialogContent>
+                    <Stack spacing={2} sx={{ mt: 1, minWidth: 400 }}>
+                        <TextField
+                            label="Class Name"
+                            fullWidth
+                            value={newClass.name}
+                            onChange={(e) => setNewClass({ ...newClass, name: e.target.value })}
+                        />
+                        <FormControl fullWidth>
+                            <InputLabel>Subject</InputLabel>
+                            <Select
+                                value={newClass.subject}
+                                label="Subject"
+                                onChange={(e) => setNewClass({ ...newClass, subject: e.target.value })}
+                            >
+                                <MenuItem value="Mathematics">Mathematics</MenuItem>
+                                <MenuItem value="Physics">Physics</MenuItem>
+                                <MenuItem value="Chemistry">Chemistry</MenuItem>
+                            </Select>
+                        </FormControl>
+                        <FormControl fullWidth>
+                            <InputLabel>Grade Level</InputLabel>
+                            <Select
+                                value={newClass.gradeLevel}
+                                label="Grade Level"
+                                onChange={(e) => setNewClass({ ...newClass, gradeLevel: e.target.value })}
+                            >
+                                <MenuItem value="9">Grade 9</MenuItem>
+                                <MenuItem value="10">Grade 10</MenuItem>
+                                <MenuItem value="11">Grade 11</MenuItem>
+                                <MenuItem value="12">Grade 12</MenuItem>
+                            </Select>
+                        </FormControl>
+                    </Stack>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setOpenDialog(false)}>Cancel</Button>
+                    <Button
+                        variant="contained"
+                        onClick={handleCreateClass}
+                        disabled={!newClass.name}
+                    >
+                        Create
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </Box>
     );
 };
