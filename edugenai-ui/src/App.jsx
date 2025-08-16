@@ -8,6 +8,7 @@ import MockTest from './pages/MockTest';
 import TeacherMockTest from './pages/TeacherMockTest';
 import TeacherQuestionBank from './pages/TeacherQuestionBank';
 import TeacherUploadQuestions from './pages/TeacherUploadQuestions';
+import TeacherManageClasses from './pages/TeacherManageClasses';
 
 function App() {
     return (
@@ -22,6 +23,7 @@ function App() {
                 <Route path="/create-exam" element={<TeacherMockTest />} />
                 <Route path="/question-bank" element={<TeacherQuestionBank />} />
                 <Route path="upload-questions" element={<TeacherUploadQuestions />} />
+                <Route path="manage-classes" element={<TeacherManageClasses />} />
             </Routes>
         </BrowserRouter>
     );
