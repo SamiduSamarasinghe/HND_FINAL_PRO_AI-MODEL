@@ -2,9 +2,7 @@ from fastapi import APIRouter,UploadFile, File, HTTPException
 from app.service.pdf_service import process_pdf
 from fastapi.responses import JSONResponse
 
-
 router = APIRouter()
-
 
 #POST http:localhost:port/pdf-reader?isPaper=
 
@@ -19,6 +17,7 @@ async def upload_file(isPaper: bool ,file: UploadFile = File(...)):
 
             results = await process_pdf(isPaper,file)
             return {"Filename:":file.filename, "message":results}        
+                
                 
     except Exception as error:
         return f"Reading Failed: {(error)}"
