@@ -1,16 +1,26 @@
 import fitz  # PyMuPDF
 import os, re, unicodedata
+import app.config.server_config as config
 from ctransformers import AutoModelForCausalLM
 
 # === Load Mistral model ===
 base_dir = os.path.dirname(__file__)
-model_path = os.path.abspath(os.path.join(base_dir, "..", "..", "ai", "mistral-7b-instruct-v0.1.Q4_K_S.gguf"))
+model_path = os.path.abspath(os.path.join(base_dir, "..", "..", "resources", "mistral-7b-instruct-v0.1.Q4_K_S.gguf"))
 
-model = AutoModelForCausalLM.from_pretrained(
+if(config.USE_CPU_FOR_AI == True):
+    model = AutoModelForCausalLM.from_pretrained(
+        model_path,
+        model_type="mistral",
+        local_files_only=True
+    )
+    print("Model running on - CPU")
+else:
+    model = AutoModelForCausalLM.from_pretrained(
     model_path,
     model_type="mistral",
-    local_files_only=True
-)
+    gpu_layers=15 # Enables GPU acceleration - redeuse this to lower gpu load
+    )
+    print("Model running on - GPU")
 
 def head_lines(txt, max_lines=15, max_chars=800):
     txt = unicodedata.normalize("NFKC", txt)
