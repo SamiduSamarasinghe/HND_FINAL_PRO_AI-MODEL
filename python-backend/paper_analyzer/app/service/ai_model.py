@@ -3,6 +3,8 @@ import os, re, unicodedata
 import app.config.server_config as config
 from ctransformers import AutoModelForCausalLM
 
+_questions = []
+__chunkSize = 10
 # Load Mistral model 
 base_dir = os.path.dirname(__file__)
 model_path = os.path.abspath(os.path.join(base_dir, "..", "..", "resources", "mistral-7b-instruct-v0.1.Q4_K_S.gguf"))
@@ -18,37 +20,34 @@ else:
     model = AutoModelForCausalLM.from_pretrained(
         model_path,
         model_type="mistral",
-        gpu_layers=15
+        gpu_layers=20
     )
     print("Model running on - GPU")
 
 
+def extractQuestionLogic(pages):
+    textGiven = cleanPageHeader(pages)
 
-#this is currently not being used
-def extractQuestions(pages):
-    textGiven = cleanPageText(pages)
-    prompt = f"""
-            You are an AI assistant specialized in processing exam papers.
+    _questionChuck ="\n\n".join(_questions[:10])
 
-            Instructions:
-            1. Remove all headers, footers, page numbers, university names, course info, exam dates, and any repeated instructions.
-            2. Keep only the exam questions, marks, and sub-parts.
-            3. Preserve numbering and sub-parts (e.g., 1., 2., a., b., c.).
-            4. Ignore raw datasets, repeated numbers, or extraneous text.
-            5. Do not add explanations or answers.
-            6. Format the output clearly and neatly.
+    prompt = f""" 
+        You are an AI assistant specialized in understanding exam questions. 
+        Instructions: 
+        1. Read the given exam questions carefully. 
+        2. Ignore headers, footers, marks, datasets, and extraneous text. 
+        3. Extract the **core logic** or the **main task** of each question. 
+        4. Do not solve the questions; only describe what the question is asking. 
+        5. Preserve numbering or sub-parts for clarity, if present. 
+        6. Output in a simple, concise numbered or bulleted list. 
+        
+        --- BEGIN QUESTIONS --- {_questionChuck} --- END QUESTIONS --- """
 
-            --- BEGIN TEXT ---
-            {textGiven}
-            --- END TEXT ---
-
-            Return the cleaned content as a simple numbered list of questions.
-            """
-    # response = model(prompt)
-    # print("\n",response)
+    response = model(prompt)
+    print("\n","\n","Model output----------------")
+    print("\n",response)
 
 
-def cleanPageText(pages, n_header_lines=9):
+def cleanPageHeader(pages, n_header_lines=9):
     """
     Cleans PDF text:
     - Removes empty lines
@@ -79,6 +78,47 @@ def cleanPageText(pages, n_header_lines=9):
     print("\nNumber of characters:", len(cleaned_text))
     
     print(cleaned_text)
+    splitQuestions(cleaned_text)
     return cleaned_text
+
+def removeEmptyLines(questions):
+    cleaned_questions = []
+    for q in questions:
+        # split into lines, remove empty ones, and rejoin
+        lines = q.splitlines()
+        non_empty = [line for line in lines if line.strip()]  # keep only non-empty
+        cleaned_questions.append("\n".join(non_empty))
+    return cleaned_questions
+
+
+
+def splitQuestions(page):
+    #question starting patterns
+    pattern = re.compile(r"""
+                            ^(?:
+                                Question\s+No\.?\s*\d+  |   #find "Question No.1"
+                                \d+\.\s*                |   #find "1."
+                                \[a-z]\.\s*             |   #find "a.1"
+                                \(?[ivx]+\)             |   #find "ii."
+                            )
+                         """,re.IGNORECASE | re.MULTILINE |re.VERBOSE)
+    
+    matches = list(pattern.finditer(page))
+
+
+    for i, match in enumerate(matches):
+        start = match.start()
+        end =  matches[i+1].start() if i+1 < len(matches) else len(page)
+        _questions.append(page[start:end].strip())
+
+    print("\n","\n")
+    print("chuckned questions 1-5 in questions in array")
+    
+    #for debuging
+    for i, question in enumerate(_questions[:10],1):
+            print(_questions[i])
+
+
+
 
 

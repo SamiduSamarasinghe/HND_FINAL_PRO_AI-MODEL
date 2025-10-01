@@ -5,7 +5,7 @@ from fastapi import UploadFile
 from app.model.firebase_db_model import saveToFirebase
 
 
-from app.service.ai_model import extractQuestions #new import
+from app.service.ai_model import extractQuestionLogic #new import
 
 
 async def process_pdf(isPaper: bool, file: UploadFile):
@@ -24,7 +24,7 @@ async def process_pdf(isPaper: bool, file: UploadFile):
                 text = page.get_text()
                 all_pages_text.append(text)
 
-            extractQuestions(all_pages_text[0])
+            extractQuestionLogic(all_pages_text[0])
 
             # Join all pages' text as one string'
             full_text = "\n--- Page Break ---\n".join(all_pages_text)
