@@ -6,6 +6,7 @@ from app.model.firebase_db_model import saveToFirebase
 
 
 from app.service.pdf_question_preparer import get_clean_questions
+from app.service.ai_model import extractCoreLogic
 
 
 async def process_pdf(isPaper: bool, file: UploadFile):
@@ -25,7 +26,15 @@ async def process_pdf(isPaper: bool, file: UploadFile):
                 all_pages_text.append(text)
 
             full_text = "\n--- Page Break ---\n".join(all_pages_text)
-            get_clean_questions(full_text)
+
+            cleaned_questions = get_clean_questions(full_text)
+            core_logices = extractCoreLogic(cleaned_questions)
+
+            combined_content = ("==========Cleaned Questions ==========\n"
+                                +"\n".join(cleaned_questions)
+                                +"==========Core Logics =============\n"
+                                +"\n".join(core_logices))
+
 
             # Join all pages' text as one string'
             full_text = "\n--- Page Break ---\n".join(all_pages_text)
@@ -33,7 +42,7 @@ async def process_pdf(isPaper: bool, file: UploadFile):
             #print(full_text)  # see extracted text
 
             if isPaper:
-               # return {saveToFirebase(all_pages_text)}
+                return {saveToFirebase(combined_content)}
 
            # else:
                 return "Read successful. New Notes added to DataBase"

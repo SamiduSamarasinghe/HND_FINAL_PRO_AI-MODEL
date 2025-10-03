@@ -6,6 +6,7 @@ def get_clean_questions(pages):
     Extract questions from pages and analyze them in chunks for core logic.
     """
     textGiven = normalizePdfQuestions(pages)
+    return _questionsList
 
 def normalizePdfQuestions(pages, n_header_lines=9):
     """
@@ -29,12 +30,16 @@ def normalizePdfQuestions(pages, n_header_lines=9):
         r'\b\d+\s*marks?\b|'          # 20 marks, 5 mark
         r'Marks?\s*:\s*\d+|'          # Marks: 20, Mark: 5
         r'\(Maximum\s*Marks?\s*:\s*\d+\)|'  # (Maximum Marks: 20)
+        r'\[?Total\s*Marks\s*[-–]\]?|'
         r'Total\s*Marks?\s*:\s*\d+',  # Total Marks: 20
         re.IGNORECASE
     )
 
     # Page break pattern
-    page_break_pattern = re.compile(r'-{2,}\s*Page\s*Break\s*-{2,}', re.IGNORECASE)
+    page_break_pattern = re.compile(
+        r'-{2,}\s*Page\s*Break\s*-{2,}|'
+        r'^\s*\d+\s*\|\s*P\s*a\s*g\s*e\s*$',
+          re.IGNORECASE)
 
     # Dataset-related patterns
     dataset_header_pattern = re.compile(
@@ -115,16 +120,47 @@ def splitQuestions(text):
 
     matches = list(pattern.finditer(text))
 
+    # cleaners
+    #  
+    # matches "Question", "Question No"
+    question_label_line = re.compile(r'^\s*Question\s*(?:No\.?\s*)?\d+\s*[:.)-]?\s*$', re.IGNORECASE | re.MULTILINE)
+
+    # matches "Question No. 12" 
+    clean_prefix = re.compile(r'^\s*Question\s*(?:No\.?\s*)?\d+\s*[:.)-]?\s*', re.IGNORECASE)
+
+    # match"--------" (line by itself)
+    dashed_line = re.compile(r'^\s*-{2,}\s*$', re.MULTILINE)
+
+    # match signle leftover brackets "[" or "]"
+    bracket_line = re.compile(r'^\s*[\[\]]\s*$', re.MULTILINE)
+
     for i, match in enumerate(matches):
         start = match.start()
         end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
         question_text = text[start:end].strip()
+
+        question_text = dashed_line.sub('', question_text)
+        question_text = bracket_line.sub('', question_text)
+        question_text = question_label_line.sub('', question_text)
+        question_text = clean_prefix.sub('', question_text).strip()
+
+        # collapse multiple blank lines
+        question_text = re.sub(r'\n\s*\n+', '\n\n', question_text).strip()
+
+        if not question_text:
+            continue
+        if question_label_line.fullmatch(question_text):  # still just "Question N"
+            continue
+        if len(question_text.split()) < 2:  # tiny garbage (adjust threshold if needed)
+            continue
+
         _questionsList.append(question_text)
 
     # Print all extracted questions
     printQuestions()
 
 
+#for debuging
 def printQuestions():
     """
     Prints all extracted questions with numbering.
