@@ -15,6 +15,7 @@ PACKAGE_MAP = {
     "fitz": "pymupdf",  # PyMuPDF provides fitz
     "firebase_admin": "firebase-admin",
     "multipart": "python-multipart",
+    "rapidfuzz":"rapidfuzz"
 
 }
 

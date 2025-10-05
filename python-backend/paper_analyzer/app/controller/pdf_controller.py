@@ -45,11 +45,15 @@ async def pdf_reader_progress_updates(isPaper: bool,file:UploadFile=File(...)):
     yield "data: Cleaning data...\n\n"
     
 #this method should be update to require type of paper to be analyse
+#http://localhost:[port]/pdf-reader/analyse?subject=statistics-papers
 @router.get("/pdf-reader/analyse")
-async def analyseFrequentAskedQuestions():
+async def analyseFrequentAskedQuestions(subject: str = None):
     try:
         print("start analysing")
-        return analyseFrequentlyAskedQuestions()
+        if(subject is None):
+            return "impelment analyse all subjects"
+        else:
+            return analyseFrequentlyAskedQuestions(subject)
     except Exception as e:
         print("Error :",str(e))
         return "Server Error"
