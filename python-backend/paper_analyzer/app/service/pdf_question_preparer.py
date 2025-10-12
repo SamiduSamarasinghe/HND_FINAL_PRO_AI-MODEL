@@ -5,10 +5,10 @@ def get_clean_questions(pages):
     """
     Extract questions from pages and analyze them in chunks for core logic.
     """
-    textGiven = normalizePdfQuestions(pages)
+    textGiven = normalize_pdf_questions(pages)
     return _questionsList
 
-def normalizePdfQuestions(pages, n_header_lines=9):
+def normalize_pdf_questions(pages, n_header_lines=9):
     """
     Cleans PDF text:
     - Removes empty lines
@@ -90,12 +90,12 @@ def normalizePdfQuestions(pages, n_header_lines=9):
     print(f"\nNumber of lines: {sum(len(p.splitlines()) for p in cleaned_pages)}")
     print(f"Number of characters: {len(cleaned_text)}")
 
-    splitQuestions(cleaned_text)
+    split_questions(cleaned_text)
     return cleaned_text
 
 
 
-def splitQuestions(text):
+def split_questions(text):
     """
     Splits text into individual questions based on patterns.
     """
@@ -157,11 +157,11 @@ def splitQuestions(text):
         _questionsList.append(question_text)
 
     # Print all extracted questions
-    printQuestions()
+    print_questions()
 
 
 #for debuging
-def printQuestions():
+def print_questions():
     """
     Prints all extracted questions with numbering.
     """

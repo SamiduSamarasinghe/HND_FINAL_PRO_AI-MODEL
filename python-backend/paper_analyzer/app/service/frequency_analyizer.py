@@ -209,7 +209,7 @@ def get_frequent_questions(all_contents, threshold=85):
     return freq_counter, similarity_log
 
 
-def analyseFrequentlyAskedQuestions(subject,similarity_threshold=85):
+def analyse_frequent_questions(subject,similarity_threshold=85):
     """
     Analyzes and finds frequently asked questions using fuzzy matching.
     Shows similarity values and calculates reappearance probability for repeated questions only.

@@ -3,13 +3,11 @@ import re
 from io import BytesIO
 from fastapi import UploadFile
 from app.model.firebase_db_model import saveToFirebase
-
-
 from app.service.pdf_question_preparer import get_clean_questions
-from app.service.ai_model import extractCoreLogic
+from app.service.ai_model import extract_core_logic
 
 
-async def process_pdf(isPaper: bool, file: UploadFile):
+async def process_pdf(file: UploadFile):
 
     try:
         if file is not None:
@@ -28,7 +26,7 @@ async def process_pdf(isPaper: bool, file: UploadFile):
             full_text = "\n--- Page Break ---\n".join(all_pages_text)
 
             cleaned_questions = get_clean_questions(full_text)
-            core_logices = extractCoreLogic(cleaned_questions)
+            core_logices = extract_core_logic(cleaned_questions)
 
             combined_content = ("==========Cleaned Questions ==========\n"
                                 +"\n".join(cleaned_questions)
@@ -40,12 +38,7 @@ async def process_pdf(isPaper: bool, file: UploadFile):
             full_text = "\n--- Page Break ---\n".join(all_pages_text)
 
             #print(full_text)  # see extracted text
-
-            if isPaper:
-                return {saveToFirebase(combined_content)}
-
-           # else:
-                return "Read successful. New Notes added to DataBase"
+            return {saveToFirebase(combined_content)}
 
         return "Reading failed"
 
