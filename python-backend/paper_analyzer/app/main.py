@@ -8,7 +8,13 @@ app = FastAPI(title="EduGen-AI Backend", version="1.0.0")
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # React frontend
+    allow_origins=[
+        "http://localhost:3000", # Create react app
+        "http://localhost:5173", # Vite default port
+        "http://localhost:5174", # Vite alternate port
+        "http://127.0.0.1:5173", # Vite with IP
+        "http://127.0.0.1:5174" # vite alternative with IP
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
