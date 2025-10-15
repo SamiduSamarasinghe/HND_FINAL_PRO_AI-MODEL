@@ -20,23 +20,24 @@ import {
     MenuItem,
     Slider,
     Grid,
-    FormControlLabel
+    FormControlLabel,
+    Alert
 } from '@mui/material';
 import { MenuBook, Psychology, ContentCopy, Download, Class as ClassIcon } from '@mui/icons-material';
 
 const TeacherMockTest = () => {
     const [subject, setSubject] = useState('');
-    const [topic, setTopic] = useState('');
     const [classGroup, setClassGroup] = useState('');
     const [difficulty, setDifficulty] = useState('');
     const [questionTypes, setQuestionTypes] = useState({
-        mcq: true,
-        shortAnswer: true,
-        essay: false
+        MCQ: true,
+        "Short Answer": true,
+        Essay: false
     });
     const [questionCount, setQuestionCount] = useState(10);
     const [isGenerating, setIsGenerating] = useState(false);
     const [generatedTest, setGeneratedTest] = useState(null);
+    const [error, setError] = useState('');
 
     // Teacher-specific data
     const teacherClasses = [
@@ -46,46 +47,48 @@ const TeacherMockTest = () => {
         { id: 'stats', name: 'Statistics', students: 35 }
     ];
 
-    const subjects = {
-        mathematics: ['Algebra', 'Calculus', 'Statistics and Probability'],
-        physics: ['Mechanics', 'Thermodynamics', 'Quantum Physics', 'Optics', 'Waves'],
-        chemistry: ['Organic Chemistry', 'Inorganic Chemistry', 'Physical Chemistry', 'Biochemistry']
-    };
+    // Available subjects from backend
+    const subjects = [
+        "statistics-papers",
+        "mathematics",
+        "physics",
+        "chemistry"
+    ];
 
-    const handleGenerate = () => {
+    const handleGenerate = async () => {
         setIsGenerating(true);
+        setError('');
+        setGeneratedTest(null);
 
-        // Simulate API call delay
-        setTimeout(() => {
-            setGeneratedTest({
-                confidence: 95,
-                processingTime: 2.8,
-                summary: `This ${difficulty} level exam for ${classGroup} contains ${questionCount} questions on ${topic}`,
-                classInfo: teacherClasses.find(c => c.id === classGroup),
-                questions: [
-                    ...(questionTypes.mcq ?
-                        Array(Math.floor(questionCount * 0.6)).fill().map((_, i) => ({
-                            type: 'MCQ',
-                            text: `Sample MCQ ${i+1} about ${topic} (${difficulty})`,
-                            options: ['Option A', 'Option B', 'Option C', 'Option D'],
-                            points: 2
-                        })) : []),
-                    ...(questionTypes.shortAnswer ?
-                        Array(Math.floor(questionCount * 0.3)).fill().map((_, i) => ({
-                            type: 'Short Answer',
-                            text: `Explain ${topic} concept ${i+1} (${difficulty})`,
-                            points: 5
-                        })) : []),
-                    ...(questionTypes.essay ?
-                        Array(Math.ceil(questionCount * 0.1)).fill().map((_, i) => ({
-                            type: 'Essay',
-                            text: `Discuss ${topic} in depth (${difficulty})`,
-                            points: 10
-                        })) : [])
-                ]
+        try {
+            const response = await fetch('http://localhost:8088/api/v1/generate-test', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    subject: subject,
+                    difficulty: difficulty,
+                    question_types: questionTypes,
+                    question_count: questionCount,
+                    class_id: classGroup
+                })
             });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || 'Failed to generate test');
+            }
+
+            const testData = await response.json();
+            setGeneratedTest(testData);
+
+        } catch (err) {
+            setError(err.message);
+            console.error('Test generation error:', err);
+        } finally {
             setIsGenerating(false);
-        }, 2500);
+        }
     };
 
     const copyToClipboard = (text) => {
@@ -95,9 +98,9 @@ const TeacherMockTest = () => {
     const resetForm = () => {
         setGeneratedTest(null);
         setSubject('');
-        setTopic('');
         setClassGroup('');
         setDifficulty('');
+        setError('');
     };
 
     return (
@@ -113,6 +116,12 @@ const TeacherMockTest = () => {
                             <MenuBook color="primary" sx={{ fontSize: 32, mr: 2 }} />
                             <Typography variant="h5">Exam Paper Generator</Typography>
                         </Box>
+
+                        {error && (
+                            <Alert severity="error" sx={{ mb: 3 }}>
+                                {error}
+                            </Alert>
+                        )}
 
                         {isGenerating ? (
                             <Box sx={{ textAlign: 'center', py: 4 }}>
@@ -144,35 +153,18 @@ const TeacherMockTest = () => {
                                         <Select
                                             value={subject}
                                             label="Subject"
-                                            onChange={(e) => {
-                                                setSubject(e.target.value);
-                                                setTopic('');
-                                            }}
+                                            onChange={(e) => setSubject(e.target.value)}
                                         >
                                             <MenuItem value="" disabled>Select subject</MenuItem>
-                                            {Object.keys(subjects).map((sub) => (
+                                            {subjects.map((sub) => (
                                                 <MenuItem key={sub} value={sub}>
-                                                    {sub.charAt(0).toUpperCase() + sub.slice(1)}
+                                                    {sub.split('-').map(word =>
+                                                        word.charAt(0).toUpperCase() + word.slice(1)
+                                                    ).join(' ')}
                                                 </MenuItem>
                                             ))}
                                         </Select>
                                     </FormControl>
-
-                                    {subject && (
-                                        <FormControl fullWidth sx={{ mb: 3 }}>
-                                            <InputLabel>Topic</InputLabel>
-                                            <Select
-                                                value={topic}
-                                                label="Topic"
-                                                onChange={(e) => setTopic(e.target.value)}
-                                            >
-                                                <MenuItem value="" disabled>Select topic</MenuItem>
-                                                {subjects[subject].map((top) => (
-                                                    <MenuItem key={top} value={top}>{top}</MenuItem>
-                                                ))}
-                                            </Select>
-                                        </FormControl>
-                                    )}
                                 </Grid>
 
                                 {/* Right Column */}
@@ -181,13 +173,13 @@ const TeacherMockTest = () => {
                                         Difficulty Level
                                     </Typography>
                                     <Stack direction="row" spacing={2} sx={{ mb: 3 }}>
-                                        {['easy', 'medium', 'hard'].map((level) => (
+                                        {['Easy', 'Medium', 'Hard'].map((level) => (
                                             <Chip
                                                 key={level}
-                                                label={`${level.charAt(0).toUpperCase() + level.slice(1)}`}
+                                                label={level}
                                                 color={
-                                                    level === 'easy' ? 'success' :
-                                                        level === 'medium' ? 'warning' : 'error'
+                                                    level === 'Easy' ? 'success' :
+                                                        level === 'Medium' ? 'warning' : 'error'
                                                 }
                                                 onClick={() => setDifficulty(level)}
                                                 variant={difficulty === level ? 'filled' : 'outlined'}
@@ -203,8 +195,8 @@ const TeacherMockTest = () => {
                                         <FormControlLabel
                                             control={
                                                 <Checkbox
-                                                    checked={questionTypes.mcq}
-                                                    onChange={(e) => setQuestionTypes({...questionTypes, mcq: e.target.checked})}
+                                                    checked={questionTypes.MCQ}
+                                                    onChange={(e) => setQuestionTypes({...questionTypes, MCQ: e.target.checked})}
                                                 />
                                             }
                                             label="MCQ (2 pts)"
@@ -212,8 +204,8 @@ const TeacherMockTest = () => {
                                         <FormControlLabel
                                             control={
                                                 <Checkbox
-                                                    checked={questionTypes.shortAnswer}
-                                                    onChange={(e) => setQuestionTypes({...questionTypes, shortAnswer: e.target.checked})}
+                                                    checked={questionTypes["Short Answer"]}
+                                                    onChange={(e) => setQuestionTypes({...questionTypes, "Short Answer": e.target.checked})}
                                                 />
                                             }
                                             label="Short Answer (5 pts)"
@@ -221,8 +213,8 @@ const TeacherMockTest = () => {
                                         <FormControlLabel
                                             control={
                                                 <Checkbox
-                                                    checked={questionTypes.essay}
-                                                    onChange={(e) => setQuestionTypes({...questionTypes, essay: e.target.checked})}
+                                                    checked={questionTypes.Essay}
+                                                    onChange={(e) => setQuestionTypes({...questionTypes, Essay: e.target.checked})}
                                                 />
                                             }
                                             label="Essay (10 pts)"
@@ -255,7 +247,7 @@ const TeacherMockTest = () => {
                                 size="large"
                                 startIcon={<Psychology />}
                                 onClick={handleGenerate}
-                                disabled={!subject || !topic || !difficulty || !classGroup}
+                                disabled={!subject || !difficulty}
                                 sx={{ px: 4, py: 1.5 }}
                             >
                                 Generate Exam Paper
@@ -268,11 +260,11 @@ const TeacherMockTest = () => {
                     <CardContent>
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
                             <Typography variant="h5">
-                                Exam Paper for {generatedTest.classInfo.name}
+                                {generatedTest.title}
                             </Typography>
                             <Chip
-                                label={`Confidence: ${generatedTest.confidence}%`}
-                                color="success"
+                                label={`Total Points: ${generatedTest.total_points}`}
+                                color="primary"
                                 variant="outlined"
                             />
                         </Box>
@@ -280,7 +272,7 @@ const TeacherMockTest = () => {
                         <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                             <ClassIcon color="primary" sx={{ mr: 1 }} />
                             <Typography>
-                                {generatedTest.classInfo.students} students | {questionCount} questions
+                                {generatedTest.total_questions} questions • {generatedTest.difficulty} level
                             </Typography>
                         </Box>
 
@@ -293,13 +285,14 @@ const TeacherMockTest = () => {
                             <Button
                                 size="small"
                                 startIcon={<ContentCopy />}
-                                onClick={() => copyToClipboard(generatedTest.summary)}
+                                onClick={() => copyToClipboard(generatedTest.title)}
                                 sx={{ position: 'absolute', right: 0, top: 0 }}
                             >
                                 Copy
                             </Button>
                             <Typography paragraph sx={{ bgcolor: '#f5f5f5', p: 2, borderRadius: 1 }}>
-                                {generatedTest.summary}
+                                This {generatedTest.difficulty.toLowerCase()} level exam contains {generatedTest.total_questions} questions
+                                on {generatedTest.subject.replace('-', ' ')} with a total of {generatedTest.total_points} points.
                             </Typography>
                         </Box>
 
@@ -318,7 +311,7 @@ const TeacherMockTest = () => {
                                     </ListItemIcon>
                                     <ListItemText
                                         primary={`${index + 1}. ${question.text}`}
-                                        secondary={`${question.points} point${question.points !== 1 ? 's' : ''}`}
+                                        secondary={`${question.points} point${question.points !== 1 ? 's' : ''} • ${question.difficulty}`}
                                     />
                                 </ListItem>
                             ))}
