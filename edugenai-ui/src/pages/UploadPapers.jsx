@@ -13,7 +13,12 @@ import {
     Divider,
     Chip,
     LinearProgress,
-    Stack
+    Stack,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions,
+    TextField
 } from '@mui/material';
 import { Upload as UploadIcon, InsertDriveFile, Download, ContentCopy } from '@mui/icons-material';
 
@@ -21,11 +26,18 @@ const UploadPapers = () => {
     const [file, setFile] = useState(null);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [analysisResult, setAnalysisResult] = useState(null);
+    const [subject, setSubject] = useState("");
+    const [year, setYear] = useState("");
+    const [institute, setInstitute] = useState("");
+    const [paperType, setPaperType] = useState(""); // 🆕 store paper type
+    const [openDialog, setOpenDialog] = useState(false); // 🆕 for dialog open/close
 
     const handleFileChange = (e) => {
         const selectedFile = e.target.files[0];
         if (selectedFile && selectedFile.type === 'application/pdf') {
-            processFile(selectedFile);
+            // open dialog to ask for paper type
+            setFile(selectedFile);
+            setOpenDialog(true);
         }
     };
 
@@ -33,28 +45,27 @@ const UploadPapers = () => {
         e.preventDefault();
         const droppedFile = e.dataTransfer.files[0];
         if (droppedFile && droppedFile.type === 'application/pdf') {
-            processFile(droppedFile);
+            setFile(droppedFile);
+            setOpenDialog(true);
         }
     }, []);
 
+    const handlePaperTypeSubmit = () => {
+        setOpenDialog(false);
+        if (file) {
+            processFile(file);
+        }
+    };
+
     const processFile = (file) => {
-        setFile(file);
         setIsAnalyzing(true);
 
-        // Simulate AI processing
-        setTimeout(() => {
-            setAnalysisResult({
-                confidence: 89,
-                processingTime: 2.7,
-                summary: "This document contains exam questions focusing on calculus derivatives and algebraic equations, with emphasis on problem-solving techniques.",
-                insights: [
-                    "15 derivative problems identified (Difficulty: Medium)",
-                    "10 algebraic equations (Difficulty: Easy)",
-                    "5 complex word problems (Difficulty: Hard)"
-                ]
-            });
-            setIsAnalyzing(false);
-        }, 2700);
+        // Simulate processing (replace this with API call)
+        console.log("File:", file.name);
+        console.log("Paper Type:", paperType);
+        console.log("Subject:", subject);
+        console.log("Year:", year);
+        console.log("Institute:", institute);
     };
 
     const copyToClipboard = (text) => {
@@ -63,18 +74,15 @@ const UploadPapers = () => {
 
     return (
         <Box sx={{ p: 3, maxWidth: 800, margin: '0 auto', textAlign: 'center' }}>
-            {/* Title */}
             <Typography variant="h4" gutterBottom sx={{ fontWeight: 'bold', mb: 2 }}>
                 PDF AI Analyzer
             </Typography>
 
-            {/* Description */}
             <Typography variant="body1" color="text.secondary" sx={{ mb: 4, maxWidth: 600, mx: 'auto' }}>
-                Upload your past papers and get instant AI-powered analysis, summaries and insights. Our advanced AI model processes your content and provides comprehensive reports with actionable recommendations.
+                Upload your past papers and get instant AI-powered analysis, summaries, and insights.
             </Typography>
 
             {!analysisResult ? (
-                /* UPLOAD AREA */
                 <Card
                     sx={{
                         border: '2px dashed #e0e0e0',
@@ -92,7 +100,6 @@ const UploadPapers = () => {
                     <CardContent>
                         <InsertDriveFile sx={{ fontSize: 60, color: 'primary.main', mb: 2 }} />
 
-                        {/* Drag & Drop Text */}
                         <Typography variant="h6" gutterBottom>
                             Drop your PDF file here
                         </Typography>
@@ -104,7 +111,6 @@ const UploadPapers = () => {
                             </Typography>
                         </Typography>
 
-                        {/* Hidden File Input */}
                         <input
                             accept=".pdf"
                             style={{ display: 'none' }}
@@ -134,10 +140,8 @@ const UploadPapers = () => {
                     </CardContent>
                 </Card>
             ) : (
-                /* ANALYSIS RESULTS */
                 <Card sx={{ boxShadow: 3, textAlign: 'left' }}>
                     <CardContent>
-                        {/* Header */}
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
                             <Typography variant="h5">AI Analysis Results</Typography>
                             <Chip
@@ -151,7 +155,6 @@ const UploadPapers = () => {
                         </Typography>
                         <Divider sx={{ my: 2 }} />
 
-                        {/* Executive Summary */}
                         <Box sx={{ position: 'relative' }}>
                             <Typography variant="h6" gutterBottom>
                                 Executive Summary
@@ -168,41 +171,30 @@ const UploadPapers = () => {
                                 {analysisResult.summary}
                             </Typography>
                         </Box>
-
-                        {/* Key Insights */}
-                        <Typography variant="h6" gutterBottom sx={{ mt: 3 }}>
-                            Key Insights
-                        </Typography>
-                        <List>
-                            {analysisResult.insights.map((insight, index) => (
-                                <ListItem key={index} sx={{ px: 0 }}>
-                                    <ListItemIcon sx={{ minWidth: 36 }}>
-                                        <Checkbox edge="start" checked={false} />
-                                    </ListItemIcon>
-                                    <ListItemText primary={insight} />
-                                </ListItem>
-                            ))}
-                        </List>
-
-                        {/* Actions */}
-                        <Stack direction="row" spacing={2} sx={{ mt: 3 }}>
-                            <Button
-                                variant="contained"
-                                startIcon={<Download />}
-                                onClick={() => alert("Exporting analysis...")}
-                            >
-                                Download Report
-                            </Button>
-                            <Button
-                                variant="outlined"
-                                onClick={() => setAnalysisResult(null)}
-                            >
-                                Analyze Another
-                            </Button>
-                        </Stack>
                     </CardContent>
                 </Card>
             )}
+
+            {/* 🆕 Dialog for Paper Type */}
+            <Dialog open={openDialog} onClose={() => setOpenDialog(false)}>
+                <DialogTitle>Enter Paper Subject (eg.statistics)</DialogTitle>
+                <DialogContent>
+                    <TextField
+                        autoFocus
+                        margin="dense"
+                        label="Paper Type"
+                        type="text"
+                        fullWidth
+                        variant="outlined"
+                        value={paperType}
+                        onChange={(e) => setPaperType(e.target.value)}
+                    />
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setOpenDialog(false)}>Cancel</Button>
+                    <Button variant="contained" onClick={handlePaperTypeSubmit}>Continue</Button>
+                </DialogActions>
+            </Dialog>
         </Box>
     );
 };
