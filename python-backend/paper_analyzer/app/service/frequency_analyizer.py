@@ -265,29 +265,6 @@ def analyse_frequent_questions(subject,similarity_threshold=85):
         for question, count in freq_counter.most_common(20):
             print(f"{count} times: {question}")
 
-    """
-    # Save results to file
-    with open("frequent_questions.txt", "w", encoding="utf-8") as f:
-        f.write("=== FREQUENTLY ASKED QUESTIONS ANALYSIS (Fuzzy Matching with Similarity) ===\n")
-        f.write(f"Total papers analyzed: {total_papers}\n")
-        f.write(f"Total unique proper questions found: {total_unique_questions}\n")
-        f.write(f"Questions appearing more than once: {repeated_count} ({repeated_percentage:.2f}%)\n")
-        f.write(f"Average estimated chance of reappearing (for repeated questions): {avg_reappearance_chance:.2f}%\n\n")
-
-        if repeated_questions:
-            f.write("=== FREQUENTLY REPEATED QUESTIONS ===\n")
-            for question_data in repeated_questions_list:
-                f.write(f"{question_data['count']} times: {question_data['question']}\n")
-        else:
-            f.write("No proper questions appeared more than once\n\n")
-            f.write("=== ALL PROPER QUESTIONS (top 20) ===\n")
-            for question, count in freq_counter.most_common(20):
-                f.write(f"{count} times: {question}\n")
-
-    print(f"\nResults saved to 'frequent_questions.txt' (includes similarity log)")
-
-    """
-
     return {
         "total_papers": total_papers,
         "total_unique_questions": total_unique_questions,
@@ -297,3 +274,105 @@ def analyse_frequent_questions(subject,similarity_threshold=85):
         "repeated_questions": repeated_questions_list,
         "similarity_log": similarity_log
     }
+
+def analyse_new_paper(subject, paperContent: str, similarity_threshold=85):
+    """
+    Compares a new paper against existing papers in Firestore to find repeated questions.
+    Returns repeated questions with similarity and estimated probability.
+    """
+    # Fetch existing papers
+    existing_contents = fetch_all_papers(subject)
+    total_existing_papers = len(existing_contents)
+
+    if total_existing_papers == 0:
+        print("No existing papers found in Firestore.")
+        return None
+
+    print(f"Found {total_existing_papers} existing papers in Firestore")
+
+    # Extract and normalize questions from the new paper
+    new_questions = extract_questions_from_content(paperContent)
+    new_questions = [normalize_question(q) for q in new_questions if is_proper_question(q)]
+    print(f"Extracted {len(new_questions)} proper questions from the new paper")
+
+    # Extract and normalize questions from existing papers
+    existing_questions = []
+    for content in existing_contents:
+        q_list = extract_questions_from_content(content)
+        existing_questions.extend([normalize_question(q) for q in q_list if is_proper_question(q)])
+
+    # Compare new paper questions with existing questions using fuzzy matching
+    repeated_questions_list = []
+    similarity_log = []
+
+    for q in new_questions:
+        matched = False
+        for existing_q in existing_questions:
+            if abs(len(q) - len(existing_q)) / len(existing_q) > 0.5:
+                continue  # Skip if length differs too much
+
+            similarity = fuzz.token_set_ratio(q, existing_q)
+            if similarity >= similarity_threshold:
+                similarity_log.append((similarity, q, existing_q))
+                repeated_questions_list.append({
+                    "question": q,
+                    "matched_with": existing_q,
+                    "similarity": similarity,
+                    "estimated_probability": (1 + 1) / (total_existing_papers + 2) * 100  # Laplace smoothing
+                })
+                matched = True
+                break
+
+        if not matched:
+            # Question not repeated, optionally you can log it
+            pass
+
+    print(f"\nRepeated questions in the new paper: {len(repeated_questions_list)}")
+    for item in repeated_questions_list:
+        print(f"{item['question']} ↔ {item['matched_with']} | Similarity: {item['similarity']:.2f}% | Estimated chance: {item['estimated_probability']:.2f}%")
+
+    return get_unique_repeated_questions(repeated_questions_list)
+
+# def format_repeated_questions_for_user(repeated_questions_list):
+#     """
+#     Converts repeated question results into a user-friendly JSON format.
+#     """
+#     cleaned_list = []
+#     for item in repeated_questions_list:
+#         cleaned_list.append({
+#             "question": item["question"],
+#             "matched_with": item["matched_with"],
+#             "similarity_percent": round(item["similarity"], 2),
+#             "estimated_reappearance_percent": round(item["estimated_probability"], 2)
+#         })
+#     return {"repeated_questions": cleaned_list, "total_repeated": len(cleaned_list)}
+
+
+def get_unique_repeated_questions(repeated_questions_list):
+    """
+    Groups repeated questions by matched question, keeping only the highest similarity.
+    Returns a cleaned list for user display.
+    """
+    grouped = {}
+    for item in repeated_questions_list:
+        key = item["question"]
+        if key not in grouped:
+            grouped[key] = item
+        else:
+            # Keep the one with higher similarity if duplicates exist
+            if item["similarity"] > grouped[key]["similarity"]:
+                grouped[key] = item
+
+    # Convert to list
+    cleaned_list = []
+    for q, item in grouped.items():
+        cleaned_list.append({
+            "question": item["question"],
+            "matched_with": item["matched_with"],
+            "similarity_percent": round(item["similarity"], 2),
+            "estimated_reappearance_percent": round(item["estimated_probability"], 2)
+        })
+
+    # Sort by similarity descending
+    cleaned_list.sort(key=lambda x: -x["similarity_percent"])
+    return cleaned_list

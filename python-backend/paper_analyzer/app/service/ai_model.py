@@ -80,6 +80,7 @@ def extract_core_logic(cleaned_questions):
 
     return final_core_logics
 
+
 def generte_questions(subject, questionCount):
     print("-----------from gen--question---------\n")
 
@@ -126,7 +127,6 @@ def generte_questions(subject, questionCount):
             """
 
 
-
         respond = model(prompt)
         print(f"[AI generated question: {respond}]")
 
@@ -162,5 +162,3 @@ def clean_anaylsiezation(text: str):
             cleaned_questions.append(line)
 
     return cleaned_questions
-
-
