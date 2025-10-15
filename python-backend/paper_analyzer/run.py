@@ -18,6 +18,7 @@ PACKAGE_MAP = {
     "rapidfuzz":"rapidfuzz",
     "pydantic": "pydantic",
     "python_multipart": "python-multipart",
+    "reportlab": "reportlab",
 }
 
 def __check_python_version():

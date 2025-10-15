@@ -83,6 +83,48 @@ const MockTest = () => {
         navigator.clipboard.writeText(text);
     };
 
+    // In MockTest.jsx and TeacherMockTest.jsx - UPDATE THIS FUNCTION:
+
+    const handleDownloadPDF = async () => {
+        try {
+            const response = await fetch('http://localhost:8088/api/v1/export/test-pdf', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(generatedTest)
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to generate PDF');
+            }
+
+            // Convert response to blob
+            const blob = await response.blob();
+
+            // Create download link
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+
+            // Create filename
+            const filename = `${generatedTest.subject}_${generatedTest.difficulty}_test.pdf`;
+            a.download = filename;
+
+            document.body.appendChild(a);
+            a.click();
+
+            // Clean up
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+
+        } catch (error) {
+            console.error('PDF download error:', error);
+            alert('Failed to download PDF. Please try again.');
+        }
+    };
+
     const resetForm = () => {
         setGeneratedTest(null);
         setSubject('');
@@ -295,9 +337,9 @@ const MockTest = () => {
                             <Button
                                 variant="contained"
                                 startIcon={<Download />}
-                                onClick={() => alert("PDF generation would be implemented here")}
+                                onClick={handleDownloadPDF}
                             >
-                                Download Test
+                                Download Test PDF
                             </Button>
                             <Button
                                 variant="outlined"
