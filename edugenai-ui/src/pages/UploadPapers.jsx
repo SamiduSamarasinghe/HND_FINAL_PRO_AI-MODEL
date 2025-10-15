@@ -18,7 +18,8 @@ import {
     DialogTitle,
     DialogContent,
     DialogActions,
-    TextField
+    TextField,
+    Alert
 } from '@mui/material';
 import { Upload as UploadIcon, InsertDriveFile, Download, ContentCopy } from '@mui/icons-material';
 
@@ -27,15 +28,12 @@ const UploadPapers = () => {
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [analysisResult, setAnalysisResult] = useState(null);
     const [subject, setSubject] = useState("");
-    const [year, setYear] = useState("");
-    const [institute, setInstitute] = useState("");
-    const [paperType, setPaperType] = useState(""); // 🆕 store paper type
-    const [openDialog, setOpenDialog] = useState(false); // 🆕 for dialog open/close
+    const [openDialog, setOpenDialog] = useState(false);
+    const [error, setError] = useState('');
 
     const handleFileChange = (e) => {
         const selectedFile = e.target.files[0];
         if (selectedFile && selectedFile.type === 'application/pdf') {
-            // open dialog to ask for paper type
             setFile(selectedFile);
             setOpenDialog(true);
         }
@@ -52,24 +50,61 @@ const UploadPapers = () => {
 
     const handlePaperTypeSubmit = () => {
         setOpenDialog(false);
-        if (file) {
-            processFile(file);
+        if (file && subject) {
+            processFile(file, subject);
         }
     };
 
-    const processFile = (file) => {
+    const processFile = async (file, subject) => {
         setIsAnalyzing(true);
+        setError('');
+        setAnalysisResult(null);
 
-        // Simulate processing (replace this with API call)
-        console.log("File:", file.name);
-        console.log("Paper Type:", paperType);
-        console.log("Subject:", subject);
-        console.log("Year:", year);
-        console.log("Institute:", institute);
+        try {
+            // Create URLSearchParams instead of FormData for better compatibility
+            const formData = new FormData();
+            formData.append('file', file);
+
+            // Add parameters as query string in the URL
+            const url = `http://localhost:8088/api/v1/pdf-reader?isPaper=true&subject=${encodeURIComponent(subject)}`;
+
+            const response = await fetch(url, {
+                method: 'POST',
+                body: formData,
+            });
+
+            if (!response.ok) {
+                let errorMessage = 'Upload failed';
+                try {
+                    const errorData = await response.json();
+                    errorMessage = errorData.detail || errorData.message || JSON.stringify(errorData);
+                } catch (parseError) {
+                    errorMessage = `Server error: ${response.status} ${response.statusText}`;
+                }
+                throw new Error(errorMessage);
+            }
+
+            const result = await response.json();
+            setAnalysisResult(result);
+            console.log('Upload result:', result);
+
+        } catch (err) {
+            setError(err.message);
+            console.error('Upload error:', err);
+        } finally {
+            setIsAnalyzing(false);
+        }
     };
 
     const copyToClipboard = (text) => {
         navigator.clipboard.writeText(text);
+    };
+
+    const resetForm = () => {
+        setFile(null);
+        setSubject('');
+        setAnalysisResult(null);
+        setError('');
     };
 
     return (
@@ -111,6 +146,12 @@ const UploadPapers = () => {
                             </Typography>
                         </Typography>
 
+                        {error && (
+                            <Alert severity="error" sx={{ mb: 3 }}>
+                                {error}
+                            </Alert>
+                        )}
+
                         <input
                             accept=".pdf"
                             style={{ display: 'none' }}
@@ -143,56 +184,68 @@ const UploadPapers = () => {
                 <Card sx={{ boxShadow: 3, textAlign: 'left' }}>
                     <CardContent>
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-                            <Typography variant="h5">AI Analysis Results</Typography>
+                            <Typography variant="h5">Upload Successful</Typography>
                             <Chip
-                                label={`Confidence: ${analysisResult.confidence}%`}
+                                label={`Subject: ${analysisResult.subject}`}
                                 color="success"
                                 variant="outlined"
                             />
                         </Box>
                         <Typography color="text.secondary" gutterBottom>
-                            Processed in {analysisResult.processingTime} seconds
+                            {analysisResult.message}
                         </Typography>
                         <Divider sx={{ my: 2 }} />
 
                         <Box sx={{ position: 'relative' }}>
                             <Typography variant="h6" gutterBottom>
-                                Executive Summary
+                                Processing Summary
                             </Typography>
                             <Button
                                 size="small"
                                 startIcon={<ContentCopy />}
-                                onClick={() => copyToClipboard(analysisResult.summary)}
+                                onClick={() => copyToClipboard(analysisResult.message)}
                                 sx={{ position: 'absolute', right: 0, top: 0 }}
                             >
                                 Copy
                             </Button>
                             <Typography paragraph sx={{ bgcolor: '#f5f5f5', p: 2, borderRadius: 1 }}>
-                                {analysisResult.summary}
+                                {analysisResult.questions_processed} questions processed and saved to {analysisResult.subject}
                             </Typography>
                         </Box>
+
+                        <Stack direction="row" spacing={2} sx={{ mt: 3 }}>
+                            <Button
+                                variant="contained"
+                                onClick={resetForm}
+                            >
+                                Upload Another
+                            </Button>
+                        </Stack>
                     </CardContent>
                 </Card>
             )}
 
-            {/* 🆕 Dialog for Paper Type */}
+            {/* Dialog for Subject Input */}
             <Dialog open={openDialog} onClose={() => setOpenDialog(false)}>
-                <DialogTitle>Enter Paper Subject (eg.statistics)</DialogTitle>
+                <DialogTitle>Enter Paper Details</DialogTitle>
                 <DialogContent>
                     <TextField
                         autoFocus
                         margin="dense"
-                        label="Paper Type"
+                        label="Subject Name"
                         type="text"
                         fullWidth
                         variant="outlined"
-                        value={paperType}
-                        onChange={(e) => setPaperType(e.target.value)}
+                        value={subject}
+                        onChange={(e) => setSubject(e.target.value)}
+                        placeholder="e.g., statistics-papers, mathematics, physics"
                     />
                 </DialogContent>
                 <DialogActions>
                     <Button onClick={() => setOpenDialog(false)}>Cancel</Button>
-                    <Button variant="contained" onClick={handlePaperTypeSubmit}>Continue</Button>
+                    <Button variant="contained" onClick={handlePaperTypeSubmit} disabled={!subject}>
+                        Continue
+                    </Button>
                 </DialogActions>
             </Dialog>
         </Box>

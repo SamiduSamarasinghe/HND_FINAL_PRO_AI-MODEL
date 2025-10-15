@@ -1,4 +1,4 @@
-from fastapi import APIRouter,UploadFile, File, HTTPException
+from fastapi import APIRouter,UploadFile, File, HTTPException, Form, Query
 from app.service.pdf_service import process_pdf
 from app.service.frequency_analyizer import analyseFrequentlyAskedQuestions
 from fastapi.responses import JSONResponse
@@ -12,19 +12,23 @@ router = APIRouter()
 #POST http:localhost:port/pdf-reader?isPaper=
 
 @router.post("/pdf-reader")
-async def upload_file(isPaper: bool ,file: UploadFile = File(...)):
-   
+async def upload_file(
+        isPaper: bool = Query(...),
+        subject: str = Query(...),
+        file: UploadFile = File(...)
+):
     try:
-        if(isPaper == True or isPaper == False):
+        if file.content_type != "application/pdf":
+            raise HTTPException(status_code=400, detail="Only PDF Files are Allowed")
 
-            if file.content_type != "application/pdf":
-                raise HTTPException (status_code=400, detail="Only PDF Files are Allowed")
+        print(f"Received: subject='{subject}', isPaper={isPaper}, file='{file.filename}'")
 
-            results = await process_pdf(isPaper,file)
-            return {"Filename:":file.filename, "message":results}        
-                
-                
+        results = await process_pdf(isPaper, file, subject)
+        return {"filename": file.filename, "subject": subject, "message": results}
+
     except Exception as error:
+        print(f"Controller error: {error}")
+        return f"Reading Failed: {str(error)}"
         return f"Reading Failed: {(error)}"
     
 
