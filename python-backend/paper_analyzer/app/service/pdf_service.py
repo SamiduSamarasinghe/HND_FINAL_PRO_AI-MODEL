@@ -4,6 +4,7 @@ from io import BytesIO
 from app.model.firebase_db_model import save_structured_questions
 from app.service.pdf_question_preparer import get_clean_questions
 from app.service.question_classifier import classify_and_structure_questions
+from app.service.question_generation_service import QuestionGenerationService  # ADD THIS
 
 async def process_pdf(isPaper: bool, file: UploadFile, subject: str):
     try:
@@ -24,22 +25,58 @@ async def process_pdf(isPaper: bool, file: UploadFile, subject: str):
             full_text = "\n--- Page Break ---\n".join(all_pages_text)
             print(f"📊 Total text extracted: {len(full_text)} characters")
 
-            # Get cleaned questions
+            # Get cleaned questions (for past papers)
             cleaned_questions = get_clean_questions(full_text)
             print(f"❓ Found {len(cleaned_questions)} cleaned questions")
 
+            # Initialize question generator
+            question_generator = QuestionGenerationService()
+            structured_questions = []
+            new_questions = []
+
             if isPaper:
-                # Classify and structure questions
-                structured_questions = classify_and_structure_questions(cleaned_questions)
-                print(f"🏷️  Structured {len(structured_questions)} questions")
+                # For past papers: classify existing questions
+                if cleaned_questions:
+                    structured_questions = classify_and_structure_questions(cleaned_questions)
+                    print(f"🏷️ Structured {len(structured_questions)} existing questions")
 
-                # Debug: Print first few structured questions
-                for i, q in enumerate(structured_questions[:3]):
-                    print(f"  Question {i+1}: {q['text'][:100]}... (Type: {q['type']})")
+                # Always generate new questions to ensure we have content
+                new_questions = question_generator.generate_questions_from_content(
+                    content=full_text,
+                    question_types=["MCQ", "Short Answer", "Essay"],
+                    num_questions=8  # Reduced for stability
+                )
+                print(f"🧠 Generated {len(new_questions)} new AI questions")
 
-                # Save structured questions to Firebase
+                # Combine questions
+                all_questions = structured_questions + new_questions
+                print(f"📚 Total questions: {len(all_questions)}")
+
+            else:
+                # For lecture notes: Generate questions from content only
+                print("📖 Processing as lecture notes - generating questions from content")
+
+                new_questions = question_generator.generate_questions_from_content(
+                    content=full_text,
+                    question_types=["MCQ", "Short Answer", "Essay"],
+                    num_questions=8,  # More questions for lecture notes
+                    subject=subject
+                )
+                print(f"🧠 Generated {len(new_questions)} questions from lecture notes")
+                all_questions = new_questions
+
+            # If no questions were generated, create fallback questions
+            if not all_questions:
+                print("⚠️ No questions generated, creating fallback questions")
+                all_questions = question_generator._generate_fallback_questions(
+                    full_text, ["MCQ", "Short Answer", "Essay"], 5
+                )
+                print(f"🔄 Created {len(all_questions)} fallback questions")
+
+            # Save questions to Firebase
+            if all_questions:
                 result = save_structured_questions(
-                    questions=structured_questions,
+                    questions=all_questions,
                     subject=subject,
                     source_file=file.filename
                 )
@@ -47,11 +84,21 @@ async def process_pdf(isPaper: bool, file: UploadFile, subject: str):
 
                 return {
                     "message": result,
-                    "questions_processed": len(structured_questions),
-                    "subject": subject
+                    "questions_processed": len(all_questions),
+                    "existing_questions": len(structured_questions),
+                    "ai_generated_questions": len(new_questions),
+                    "subject": subject,
+                    "note": "Questions generated using AI" if not structured_questions else "Mixed extracted and AI-generated questions"
                 }
-
-            return "Read successful. New Notes added to database"
+            else:
+                return {
+                    "message": "No questions could be generated from the document",
+                    "questions_processed": 0,
+                    "existing_questions": 0,
+                    "ai_generated_questions": 0,
+                    "subject": subject,
+                    "note": "Please try a different document or check the content"
+                }
 
         return "Reading failed"
     except Exception as error:

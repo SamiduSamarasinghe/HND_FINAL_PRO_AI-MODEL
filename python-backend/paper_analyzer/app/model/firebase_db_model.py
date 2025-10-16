@@ -31,8 +31,21 @@ def save_structured_questions(questions: list, subject: str, source_file: str):
             question_data["source_file"] = source_file
             question_data["created_at"] = firestore.SERVER_TIMESTAMP
 
+            #Add source tracking (extracted vs AI-generated)
+            if "source" not in question_data:
+                question_data["source"] = "extracted" #Default for existing questions
+
+            #Ensure correct_answer feild exists (can be empty)
+            if "correct_answer" not in question_data:
+                question_data["correct_answer"] = ""
+
+            #Ensure topic field exists
+            if "topic" not in question_data or not question_data["topic"]:
+                question_data["topic"] = "General"
+
             batch.set(question_ref, question_data)
-            print(f"  📝 Question {i+1}: {question_data['text'][:50]}...")
+            source_type = question_data.get("source", "extracted")
+            print(f"  📝 Question {i+1} ({source_type}): {question_data['text'][:50]}...")
 
         # Commit batch
         batch.commit()

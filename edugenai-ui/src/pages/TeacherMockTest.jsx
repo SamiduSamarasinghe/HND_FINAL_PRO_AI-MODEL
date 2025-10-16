@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
     Box,
     Typography,
@@ -28,7 +28,6 @@ import { MenuBook, Psychology, ContentCopy, Download, Class as ClassIcon } from 
 const TeacherMockTest = () => {
     const [subject, setSubject] = useState('');
     const [classGroup, setClassGroup] = useState('');
-    const [difficulty, setDifficulty] = useState('');
     const [questionTypes, setQuestionTypes] = useState({
         MCQ: true,
         "Short Answer": true,
@@ -38,6 +37,8 @@ const TeacherMockTest = () => {
     const [isGenerating, setIsGenerating] = useState(false);
     const [generatedTest, setGeneratedTest] = useState(null);
     const [error, setError] = useState('');
+    const [subjects, setSubjects] = useState([]);
+    const [loadingSubjects, setLoadingSubjects] = useState(true);
 
     // Teacher-specific data
     const teacherClasses = [
@@ -47,13 +48,26 @@ const TeacherMockTest = () => {
         { id: 'stats', name: 'Statistics', students: 35 }
     ];
 
-    // Available subjects from backend
-    const subjects = [
-        "statistics-papers",
-        "mathematics",
-        "physics",
-        "chemistry"
-    ];
+    // Fetch subjects from backend
+    useEffect(() => {
+        const fetchSubjects = async () => {
+            try {
+                const response = await fetch('http://localhost:8088/api/v1/subjects');
+                if (!response.ok) {
+                    throw new Error('Failed to fetch subjects');
+                }
+                const data = await response.json();
+                setSubjects(data.subjects || []);
+            } catch (err) {
+                console.error('Error fetching subjects:', err);
+                setError('Failed to load subjects');
+            } finally {
+                setLoadingSubjects(false);
+            }
+        };
+
+        fetchSubjects();
+    }, []);
 
     const handleGenerate = async () => {
         setIsGenerating(true);
@@ -68,7 +82,6 @@ const TeacherMockTest = () => {
                 },
                 body: JSON.stringify({
                     subject: subject,
-                    difficulty: difficulty,
                     question_types: questionTypes,
                     question_count: questionCount,
                     class_id: classGroup
@@ -99,7 +112,6 @@ const TeacherMockTest = () => {
         setGeneratedTest(null);
         setSubject('');
         setClassGroup('');
-        setDifficulty('');
         setError('');
     };
 
@@ -154,13 +166,14 @@ const TeacherMockTest = () => {
                                             value={subject}
                                             label="Subject"
                                             onChange={(e) => setSubject(e.target.value)}
+                                            disabled={loadingSubjects}
                                         >
-                                            <MenuItem value="" disabled>Select subject</MenuItem>
+                                            <MenuItem value="" disabled>
+                                                {loadingSubjects ? "Loading subjects..." : "Select subject"}
+                                            </MenuItem>
                                             {subjects.map((sub) => (
-                                                <MenuItem key={sub} value={sub}>
-                                                    {sub.split('-').map(word =>
-                                                        word.charAt(0).toUpperCase() + word.slice(1)
-                                                    ).join(' ')}
+                                                <MenuItem key={sub.id} value={sub.id}>
+                                                    {sub.name} ({sub.total_questions} questions)
                                                 </MenuItem>
                                             ))}
                                         </Select>
@@ -169,25 +182,6 @@ const TeacherMockTest = () => {
 
                                 {/* Right Column */}
                                 <Grid item xs={12} md={6}>
-                                    <Typography variant="subtitle1" gutterBottom>
-                                        Difficulty Level
-                                    </Typography>
-                                    <Stack direction="row" spacing={2} sx={{ mb: 3 }}>
-                                        {['Easy', 'Medium', 'Hard'].map((level) => (
-                                            <Chip
-                                                key={level}
-                                                label={level}
-                                                color={
-                                                    level === 'Easy' ? 'success' :
-                                                        level === 'Medium' ? 'warning' : 'error'
-                                                }
-                                                onClick={() => setDifficulty(level)}
-                                                variant={difficulty === level ? 'filled' : 'outlined'}
-                                                sx={{ flex: 1 }}
-                                            />
-                                        ))}
-                                    </Stack>
-
                                     <Typography variant="subtitle1" gutterBottom>
                                         Question Types
                                     </Typography>
@@ -247,7 +241,7 @@ const TeacherMockTest = () => {
                                 size="large"
                                 startIcon={<Psychology />}
                                 onClick={handleGenerate}
-                                disabled={!subject || !difficulty}
+                                disabled={!subject}
                                 sx={{ px: 4, py: 1.5 }}
                             >
                                 Generate Exam Paper
@@ -272,7 +266,7 @@ const TeacherMockTest = () => {
                         <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                             <ClassIcon color="primary" sx={{ mr: 1 }} />
                             <Typography>
-                                {generatedTest.total_questions} questions • {generatedTest.difficulty} level
+                                {generatedTest.total_questions} questions
                             </Typography>
                         </Box>
 
@@ -291,7 +285,7 @@ const TeacherMockTest = () => {
                                 Copy
                             </Button>
                             <Typography paragraph sx={{ bgcolor: '#f5f5f5', p: 2, borderRadius: 1 }}>
-                                This {generatedTest.difficulty.toLowerCase()} level exam contains {generatedTest.total_questions} questions
+                                This exam contains {generatedTest.total_questions} questions
                                 on {generatedTest.subject.replace('-', ' ')} with a total of {generatedTest.total_points} points.
                             </Typography>
                         </Box>
@@ -311,7 +305,7 @@ const TeacherMockTest = () => {
                                     </ListItemIcon>
                                     <ListItemText
                                         primary={`${index + 1}. ${question.text}`}
-                                        secondary={`${question.points} point${question.points !== 1 ? 's' : ''} • ${question.difficulty}`}
+                                        secondary={`${question.points} point${question.points !== 1 ? 's' : ''}`}
                                     />
                                 </ListItem>
                             ))}

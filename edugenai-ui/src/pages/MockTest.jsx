@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
     Box,
     Typography,
@@ -26,7 +26,6 @@ import { MenuBook, Psychology, ContentCopy, Download } from '@mui/icons-material
 
 const MockTest = () => {
     const [subject, setSubject] = useState('');
-    const [difficulty, setDifficulty] = useState('');
     const [questionTypes, setQuestionTypes] = useState({
         MCQ: true,
         "Short Answer": true,
@@ -36,13 +35,29 @@ const MockTest = () => {
     const [isGenerating, setIsGenerating] = useState(false);
     const [generatedTest, setGeneratedTest] = useState(null);
     const [error, setError] = useState('');
+    const [subjects, setSubjects] = useState([]);
+    const [loadingSubjects, setLoadingSubjects] = useState(true);
 
-    const subjects = [
-        "statistics-papers",
-        "mathematics",
-        "physics",
-        "chemistry"
-    ];
+    // Fetch subjects from backend
+    useEffect(() => {
+        const fetchSubjects = async () => {
+            try {
+                const response = await fetch('http://localhost:8088/api/v1/subjects');
+                if (!response.ok) {
+                    throw new Error('Failed to fetch subjects');
+                }
+                const data = await response.json();
+                setSubjects(data.subjects || []);
+            } catch (err) {
+                console.error('Error fetching subjects:', err);
+                setError('Failed to load subjects');
+            } finally {
+                setLoadingSubjects(false);
+            }
+        };
+
+        fetchSubjects();
+    }, []);
 
     const handleGenerate = async () => {
         setIsGenerating(true);
@@ -57,7 +72,6 @@ const MockTest = () => {
                 },
                 body: JSON.stringify({
                     subject: subject,
-                    difficulty: difficulty,
                     question_types: questionTypes,
                     question_count: questionCount
                 })
@@ -83,8 +97,6 @@ const MockTest = () => {
         navigator.clipboard.writeText(text);
     };
 
-    // In MockTest.jsx and TeacherMockTest.jsx - UPDATE THIS FUNCTION:
-
     const handleDownloadPDF = async () => {
         try {
             const response = await fetch('http://localhost:8088/api/v1/export/test-pdf', {
@@ -99,23 +111,18 @@ const MockTest = () => {
                 throw new Error('Failed to generate PDF');
             }
 
-            // Convert response to blob
             const blob = await response.blob();
-
-            // Create download link
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.style.display = 'none';
             a.href = url;
 
-            // Create filename
-            const filename = `${generatedTest.subject}_${generatedTest.difficulty}_test.pdf`;
+            const filename = `${generatedTest.subject}_test.pdf`;
             a.download = filename;
 
             document.body.appendChild(a);
             a.click();
 
-            // Clean up
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
 
@@ -128,7 +135,6 @@ const MockTest = () => {
     const resetForm = () => {
         setGeneratedTest(null);
         setSubject('');
-        setDifficulty('');
         setError('');
     };
 
@@ -141,7 +147,7 @@ const MockTest = () => {
             {!generatedTest ? (
                 <>
                     <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
-                        Create customized practice tests with AI-generated questions based on your subject preferences and difficulty level.
+                        Create customized practice tests with AI-generated questions based on your subject preferences.
                     </Typography>
 
                     {error && (
@@ -157,7 +163,7 @@ const MockTest = () => {
                                 <Typography variant="h5">Mock Test Generator</Typography>
                             </Box>
                             <Typography color="text.secondary" sx={{ mb: 4 }}>
-                                Create customized practice tests based on your subject preferences and difficulty level.
+                                Create customized practice tests based on your subject preferences.
                             </Typography>
 
                             {isGenerating ? (
@@ -173,40 +179,18 @@ const MockTest = () => {
                                             value={subject}
                                             label="Subject"
                                             onChange={(e) => setSubject(e.target.value)}
+                                            disabled={loadingSubjects}
                                         >
-                                            <MenuItem value="" disabled>Select a subject</MenuItem>
+                                            <MenuItem value="" disabled>
+                                                {loadingSubjects ? "Loading subjects..." : "Select a subject"}
+                                            </MenuItem>
                                             {subjects.map((sub) => (
-                                                <MenuItem key={sub} value={sub}>
-                                                    {sub.split('-').map(word =>
-                                                        word.charAt(0).toUpperCase() + word.slice(1)
-                                                    ).join(' ')}
+                                                <MenuItem key={sub.id} value={sub.id}>
+                                                    {sub.name} ({sub.total_questions} questions)
                                                 </MenuItem>
                                             ))}
                                         </Select>
                                     </FormControl>
-
-                                    <Typography variant="subtitle1" gutterBottom sx={{ mt: 2 }}>
-                                        Difficulty Level
-                                    </Typography>
-                                    <Stack direction="row" spacing={2} sx={{ mb: 3 }}>
-                                        {[
-                                            { level: 'Easy', description: 'Basic concepts' },
-                                            { level: 'Medium', description: 'Intermediate level' },
-                                            { level: 'Hard', description: 'Advanced concepts' }
-                                        ].map((levelInfo) => (
-                                            <Chip
-                                                key={levelInfo.level}
-                                                label={`${levelInfo.level} - ${levelInfo.description}`}
-                                                color={
-                                                    levelInfo.level === 'Easy' ? 'success' :
-                                                        levelInfo.level === 'Medium' ? 'warning' : 'error'
-                                                }
-                                                onClick={() => setDifficulty(levelInfo.level)}
-                                                variant={difficulty === levelInfo.level ? 'filled' : 'outlined'}
-                                                sx={{ flex: 1 }}
-                                            />
-                                        ))}
-                                    </Stack>
 
                                     <Typography variant="subtitle1" gutterBottom>
                                         Question Types
@@ -264,7 +248,7 @@ const MockTest = () => {
                                             size="large"
                                             startIcon={<Psychology />}
                                             onClick={handleGenerate}
-                                            disabled={!subject || !difficulty}
+                                            disabled={!subject}
                                             sx={{ px: 4, py: 1.5 }}
                                         >
                                             Generate Test
@@ -287,7 +271,7 @@ const MockTest = () => {
                             />
                         </Box>
                         <Typography color="text.secondary" gutterBottom>
-                            {generatedTest.total_questions} questions • {generatedTest.difficulty} level
+                            {generatedTest.total_questions} questions
                         </Typography>
                         <Divider sx={{ my: 2 }} />
 
@@ -304,7 +288,7 @@ const MockTest = () => {
                                 Copy
                             </Button>
                             <Typography paragraph sx={{ bgcolor: '#f5f5f5', p: 2, borderRadius: 1 }}>
-                                This {generatedTest.difficulty.toLowerCase()} level test contains {generatedTest.total_questions} questions
+                                This test contains {generatedTest.total_questions} questions
                                 focusing on {generatedTest.subject.replace('-', ' ')} with a total of {generatedTest.total_points} points.
                             </Typography>
                         </Box>
@@ -327,7 +311,7 @@ const MockTest = () => {
                                     </ListItemIcon>
                                     <ListItemText
                                         primary={`${index + 1}. ${question.text}`}
-                                        secondary={`${question.points} point${question.points !== 1 ? 's' : ''} • ${question.difficulty}`}
+                                        secondary={`${question.points} point${question.points !== 1 ? 's' : ''}`}
                                     />
                                 </ListItem>
                             ))}

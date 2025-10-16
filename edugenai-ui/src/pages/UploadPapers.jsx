@@ -5,11 +5,6 @@ import {
     Card,
     CardContent,
     Button,
-    List,
-    ListItem,
-    ListItemIcon,
-    ListItemText,
-    Checkbox,
     Divider,
     Chip,
     LinearProgress,
@@ -21,7 +16,7 @@ import {
     TextField,
     Alert
 } from '@mui/material';
-import { Upload as UploadIcon, InsertDriveFile, Download, ContentCopy } from '@mui/icons-material';
+import { Upload as UploadIcon, InsertDriveFile, ContentCopy } from '@mui/icons-material';
 
 const UploadPapers = () => {
     const [file, setFile] = useState(null);
@@ -61,11 +56,9 @@ const UploadPapers = () => {
         setAnalysisResult(null);
 
         try {
-            // Create URLSearchParams instead of FormData for better compatibility
             const formData = new FormData();
             formData.append('file', file);
 
-            // Add parameters as query string in the URL
             const url = `http://localhost:8088/api/v1/pdf-reader?isPaper=true&subject=${encodeURIComponent(subject)}`;
 
             const response = await fetch(url, {
@@ -191,9 +184,12 @@ const UploadPapers = () => {
                                 variant="outlined"
                             />
                         </Box>
+
+                        {/* FIXED: Properly access the message property */}
                         <Typography color="text.secondary" gutterBottom>
-                            {analysisResult.message}
+                            {analysisResult.message || 'Document processed successfully'}
                         </Typography>
+
                         <Divider sx={{ my: 2 }} />
 
                         <Box sx={{ position: 'relative' }}>
@@ -203,13 +199,31 @@ const UploadPapers = () => {
                             <Button
                                 size="small"
                                 startIcon={<ContentCopy />}
-                                onClick={() => copyToClipboard(analysisResult.message)}
+                                onClick={() => copyToClipboard(analysisResult.message || 'Processing complete')}
                                 sx={{ position: 'absolute', right: 0, top: 0 }}
                             >
                                 Copy
                             </Button>
+
+                            {/* FIXED: Properly render the processing summary */}
                             <Typography paragraph sx={{ bgcolor: '#f5f5f5', p: 2, borderRadius: 1 }}>
                                 {analysisResult.questions_processed} questions processed and saved to {analysisResult.subject}
+                                {analysisResult.ai_generated_questions > 0 && (
+                                    <Box sx={{ mt: 1 }}>
+                                        <Chip
+                                            label={`${analysisResult.ai_generated_questions} AI-generated questions`}
+                                            color="success"
+                                            size="small"
+                                        />
+                                    </Box>
+                                )}
+                                {analysisResult.note && (
+                                    <Box sx={{ mt : 1 }}>
+                                        <Typography variant="body2" color="text.secondry">
+                                            {analysisResult.note}
+                                        </Typography>
+                                    </Box>
+                                )}
                             </Typography>
                         </Box>
 

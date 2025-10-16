@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from typing import List
 import traceback
 
-from app.model.test_models import TestGenerationRequest, GeneratedTest, QuestionType, Difficulty
+from app.model.test_models import TestGenerationRequest, GeneratedTest, QuestionType
 from app.service.test_generation_service import TestGenerationService
 
 router = APIRouter()

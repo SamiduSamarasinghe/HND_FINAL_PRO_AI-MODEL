@@ -1,7 +1,7 @@
 import re
 from typing import List, Dict
 from app.config.firebase_connection import FirebaseConnector
-from app.model.test_models import Question, QuestionType, Difficulty
+from app.model.test_models import Question, QuestionType
 
 class QuestionExtractionService:
     def __init__(self):
@@ -36,10 +36,13 @@ class QuestionExtractionService:
                     text=data["text"],
                     type=QuestionType(data["type"]),
                     points=self._assign_points(data["type"]),
-                    difficulty=Difficulty.MEDIUM,  # Remove difficulty filtering as requested
                     options=data.get("options"),
                     correct_answer=data.get("correct_answer")
                 )
+                #Store source information
+                if "source" in data:
+                    question.source = data["source"]
+
                 all_questions.append(question)
 
             print(f"Extracted {len(all_questions)} structured questions from {subject}")
@@ -138,16 +141,6 @@ class QuestionExtractionService:
              question_type = QuestionType.MCQ
              points = 2
 
-        #determine difficulty
-        word_count = len(text.split())
-        if word_count > 20 or any(complex_word in text_lower for complex_word in
-                                 ['probability', 'deviation', 'correlation', 'calculate']):
-            difficulty = Difficulty.HARD
-        elif word_count > 12:
-             difficulty = Difficulty.MEDIUM
-        else:
-            difficulty = Difficulty.EASY
-
         #create MCQ questions if needed
         options = None
         if question_type == QuestionType.MCQ:
@@ -157,6 +150,5 @@ class QuestionExtractionService:
             text=text,
             type=question_type,
             points=points,
-            difficulty=difficulty,
             options=options
         )

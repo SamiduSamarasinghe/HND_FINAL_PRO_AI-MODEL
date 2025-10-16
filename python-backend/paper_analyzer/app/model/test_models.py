@@ -8,16 +8,11 @@ class QuestionType(str, Enum):
     SHORT_ANSWER = "Short Answer"
     ESSAY = "Essay"
 
-class Difficulty(str, Enum):
-    EASY = "Easy"
-    MEDIUM = "Medium"
-    HARD = "Hard"
 
 class Question(BaseModel):
     text: str
     type: QuestionType
     points: int
-    difficulty: Difficulty
     options: Optional[List[str]] = None  # For MCQ
     correct_answer: Optional[str] = None
 
@@ -28,14 +23,12 @@ class GeneratedTest(BaseModel):
     questions: List[Question]
     total_questions: int
     total_points: int
-    difficulty: Difficulty
     created_at: datetime
     created_by: str  # user_id
     class_id: Optional[str] = None
 
 class TestGenerationRequest(BaseModel):
     subject: str
-    difficulty: Difficulty
     question_types: Dict[QuestionType, bool]
     question_count: int
     class_id: Optional[str] = None

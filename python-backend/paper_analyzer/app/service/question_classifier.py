@@ -26,10 +26,23 @@ def classify_and_structure_questions(cleaned_questions: List[str]) -> List[Dict]
             "type": question_type.value,
             "options": options,
             "topic": topic,
-            "correct_answer": None  # Can be filled later
+            "correct_answer": generate_correct_answer(question_text, question_type),
+            "source": "extracted"
         })
 
     return structured_questions
+
+def generate_correct_answer(question_text: str, question_type: QuestionType) -> str:
+    """
+    Generate placeholder correct answers that can be filled later
+    """
+    if question_type == QuestionType.MCQ:
+        return "A" #Default correct answer for MCQ
+    elif question_type == QuestionType.SHORT_ANSWER:
+        return "Sample answer based on question context"
+    elif question_type == QuestionType.ESSAY:
+        return  "Essay grading rubric and key points"
+    return ""
 
 def classify_question_type(question_text: str) -> QuestionType:
     """

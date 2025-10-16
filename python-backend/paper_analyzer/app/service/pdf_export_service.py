@@ -133,7 +133,7 @@ class PDFExportService:
         elements.append(question_para)
 
         # Question metadata
-        meta_text = f"<i>Type: {question.type} | Points: {question.points} | Difficulty: {question.difficulty}</i>"
+        meta_text = f"<i>Type: {question.type} | Points: {question.points}</i>"
         meta_para = Paragraph(meta_text, self.styles['Italic'])
         elements.append(meta_para)
 
