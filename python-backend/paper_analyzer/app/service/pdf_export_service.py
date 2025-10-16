@@ -19,12 +19,12 @@ class PDFExportService:
 
     def _setup_custom_styles(self):
         """Setup custom styles for the PDF"""
-        # Title style - using correct parent style
+        # Title style
         self.styles.add(ParagraphStyle(
             name='CustomTitle',
-            parent=self.styles['Heading1'],  # ✅ FIXED: Use existing style
+            parent=self.styles['Heading1'],
             fontSize=16,
-            spaceAfter=30,
+            spaceAfter=20,
             alignment=TA_CENTER,
             textColor=colors.darkblue
         ))
@@ -32,9 +32,9 @@ class PDFExportService:
         # Subtitle style
         self.styles.add(ParagraphStyle(
             name='CustomSubtitle',
-            parent=self.styles['Heading2'],  # ✅ FIXED: Use existing style
+            parent=self.styles['Heading2'],
             fontSize=12,
-            spaceAfter=20,
+            spaceAfter=15,
             alignment=TA_CENTER,
             textColor=colors.gray
         ))
@@ -44,8 +44,9 @@ class PDFExportService:
             name='CustomQuestion',
             parent=self.styles['Normal'],
             fontSize=10,
-            spaceAfter=12,
-            leftIndent=20
+            spaceAfter=8,
+            leftIndent=0,
+            textColor=colors.black
         ))
 
         # Question number style
@@ -53,9 +54,19 @@ class PDFExportService:
             name='CustomQuestionNumber',
             parent=self.styles['Normal'],
             fontSize=10,
-            spaceAfter=12,
+            spaceAfter=8,
             textColor=colors.darkblue,
             fontName='Helvetica-Bold'
+        ))
+
+        #Metadata style
+        self.styles.add(ParagraphStyle(
+            name='QuestionMeta',
+            parent=self.styles['Italic'],
+            fontSize=9,
+            spaceAfter=12,
+            leftIndent=0,
+            textColor=colors.gray
         ))
 
     def generate_test_pdf(self, test: GeneratedTest) -> bytes:
@@ -83,7 +94,6 @@ class PDFExportService:
             # Add test information
             info_text = f"""
             <b>Subject:</b> {test.subject.replace('-', ' ').title()} | 
-            <b>Difficulty:</b> {test.difficulty} | 
             <b>Total Questions:</b> {test.total_questions} | 
             <b>Total Points:</b> {test.total_points}
             """
@@ -93,10 +103,10 @@ class PDFExportService:
             # Add instructions
             instructions = Paragraph(
                 "<b>Instructions:</b> Answer all questions in the space provided. Show all your work where necessary.",
-                self.styles['Normal']
+                self.styles['CustomQuestion']
             )
             story.append(instructions)
-            story.append(Spacer(1, 20))
+            story.append(Spacer(1, 15))
 
             # Add questions
             for i, question in enumerate(test.questions, 1):
@@ -110,7 +120,7 @@ class PDFExportService:
                 else:  # Essay
                     story.extend(self._create_essay_answer_space())
 
-                story.append(Spacer(1, 15))
+                story.append(Spacer(1, 10))
 
             # Build PDF
             doc.build(story)
@@ -127,22 +137,42 @@ class PDFExportService:
         """Create question section with number and text"""
         elements = []
 
+        #Get correct points based on question type
+        points = self._get_correct_points(question.type)
+
         # Question number and text
         question_text = f"<b>Question {number}:</b> {question.text}"
         question_para = Paragraph(question_text, self.styles['CustomQuestion'])
         elements.append(question_para)
 
         # Question metadata
-        meta_text = f"<i>Type: {question.type} | Points: {question.points}</i>"
-        meta_para = Paragraph(meta_text, self.styles['Italic'])
+        meta_text = f"<i>Type: {question.type} | Points: {points}</i>"
+        meta_para = Paragraph(meta_text, self.styles['QuestionMeta'])
         elements.append(meta_para)
 
         # Add MCQ options if applicable
         if question.type == "MCQ" and question.options:
             elements.extend(self._create_mcq_options(question.options))
 
-        elements.append(Spacer(1, 10))
         return elements
+
+    def _get_correct_points(self, question_type: str) -> int:
+        """Return correct points based on question type"""
+        points_map = {
+            "MCQ": 2,
+            "Short Answer": 5,
+            "Essay": 8
+        }
+        return points_map.get(question_type, 2)
+
+    def _get_create_points(selfself, question_type: str) -> int:
+        """Return correct points based on question type"""
+        points_map = {
+            "MCQ": 2,
+            "Short Answer": 5,
+            "Essay": 8
+        }
+        return points_map.get(question_type, 2)
 
     def _create_mcq_options(self, options: List[str]) -> List:
         """Create MCQ options table"""
@@ -156,39 +186,39 @@ class PDFExportService:
         option_table.setStyle(TableStyle([
             ('FONT', (0, 0), (-1, -1), 'Helvetica', 9),
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('LEFTPADDING', (0, 0), (-1, -1), 10),
+            ('LEFTPADDING', (0, 0), (-1, -1), 0),
             ('RIGHTPADDING', (0, 0), (-1, -1), 10),
         ]))
 
         elements.append(option_table)
+        elements.append(Spacer(1, 8))
         return elements
 
     def _create_mcq_answer_space(self) -> List:
         """Create space for MCQ answer"""
         elements = []
-        answer_text = Paragraph("<b>Your Answer:</b> _________________________", self.styles['Normal'])
+        answer_text = Paragraph("<b>Your Answer:</b> _________________________", self.styles['CustomQuestion'])
         elements.append(answer_text)
-        elements.append(Spacer(1, 15))
         return elements
 
     def _create_short_answer_space(self) -> List:
         """Create space for short answer"""
         elements = []
-        elements.append(Paragraph("<b>Your Answer:</b>", self.styles['Normal']))
-        elements.append(Spacer(1, 0.1*inch))
+        elements.append(Paragraph("<b>Your Answer:</b>", self.styles['CustomQuestion']))
+        elements.append(Spacer(1, 0.05*inch))
         # Add some lines for writing
-        for _ in range(3):
-            elements.append(Paragraph("_" * 100, self.styles['Normal']))
+        for _ in range(2):
+            elements.append(Paragraph("_" * 80, self.styles['CustomQuestion']))
             elements.append(Spacer(1, 0.05*inch))
         return elements
 
     def _create_essay_answer_space(self) -> List:
         """Create space for essay answer"""
         elements = []
-        elements.append(Paragraph("<b>Your Answer:</b>", self.styles['Normal']))
-        elements.append(Spacer(1, 0.1*inch))
+        elements.append(Paragraph("<b>Your Answer:</b>", self.styles['CustomQuestion']))
+        elements.append(Spacer(1, 0.05*inch))
         # Add more lines for essay
-        for _ in range(15):
-            elements.append(Paragraph("_" * 100, self.styles['Normal']))
+        for _ in range(5):
+            elements.append(Paragraph("_" * 80, self.styles['CustomQuestion']))
             elements.append(Spacer(1, 0.05*inch))
         return elements

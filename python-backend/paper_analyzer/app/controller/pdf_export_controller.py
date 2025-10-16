@@ -18,7 +18,7 @@ async def export_text_pdf(test: GeneratedTest):
         pdf_bytes = pdf_service.generate_test_pdf(test)
 
         #Create filename
-        filename = f"{test.subject}_{test.difficulty}_test.pdf"
+        filename = f"{test.subject}_test.pdf"
         filename = filename.replace(" ", "_").lower()
 
         #Return as streaming response

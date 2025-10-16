@@ -39,10 +39,6 @@ def save_structured_questions(questions: list, subject: str, source_file: str):
             if "correct_answer" not in question_data:
                 question_data["correct_answer"] = ""
 
-            #Ensure topic field exists
-            if "topic" not in question_data or not question_data["topic"]:
-                question_data["topic"] = "General"
-
             batch.set(question_ref, question_data)
             source_type = question_data.get("source", "extracted")
             print(f"  📝 Question {i+1} ({source_type}): {question_data['text'][:50]}...")

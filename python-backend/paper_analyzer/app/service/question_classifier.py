@@ -15,9 +15,6 @@ def classify_and_structure_questions(cleaned_questions: List[str]) -> List[Dict]
         # Classify question type
         question_type = classify_question_type(question_text)
 
-        # Detect topic
-        topic = detect_topic(question_text)
-
         # Generate options for MCQ
         options = generate_mcq_options(question_text) if question_type == QuestionType.MCQ else None
 
@@ -25,7 +22,6 @@ def classify_and_structure_questions(cleaned_questions: List[str]) -> List[Dict]
             "text": clean_question_text(question_text),
             "type": question_type.value,
             "options": options,
-            "topic": topic,
             "correct_answer": generate_correct_answer(question_text, question_type),
             "source": "extracted"
         })
@@ -80,22 +76,6 @@ def generate_mcq_options(question_text: str) -> List[str]:
         "Option D - Fourth choice"
     ]
 
-def detect_topic(question_text: str) -> str:
-    """
-    Detect question topic based on keywords
-    """
-    text_lower = question_text.lower()
-
-    if any(word in text_lower for word in ['mean', 'median', 'mode', 'average']):
-        return "Descriptive Statistics"
-    elif any(word in text_lower for word in ['probability', 'chance', 'likely']):
-        return "Probability"
-    elif any(word in text_lower for word in ['correlation', 'regression', 'relationship']):
-        return "Correlation & Regression"
-    elif any(word in text_lower for word in ['confidence', 'interval', 'hypothesis']):
-        return "Inferential Statistics"
-    else:
-        return "General Statistics"
 
 def is_valid_question(text: str) -> bool:
     """

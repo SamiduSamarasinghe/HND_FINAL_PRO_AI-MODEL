@@ -28,20 +28,28 @@ class QuestionExtractionService:
 
             all_questions = []
 
+            print(f"Looking for questions in subject: {subject}")
+
             for doc in docs:
                 data = doc.to_dict()
+
+                #Debug: check subject and content
+                doc_subject = data.get("subject", "")
+                question_text = data.get("text", "")
+
+                #Skip if subject doesn't match
+                if doc_subject.lower() != subject.lower():
+                    print(f"Skipping question - subject mismatch: {doc_subject} != {subject}")
+                    continue
 
                 # Convert to Question model
                 question = Question(
                     text=data["text"],
-                    type=QuestionType(data["type"]),
-                    points=self._assign_points(data["type"]),
+                    type=QuestionType(data.get("type", "MCQ")),
+                    points=self._assign_points(data.get("type", "MCQ")),
                     options=data.get("options"),
-                    correct_answer=data.get("correct_answer")
+                    correct_answer=data.get("correct_answer", "")
                 )
-                #Store source information
-                if "source" in data:
-                    question.source = data["source"]
 
                 all_questions.append(question)
 

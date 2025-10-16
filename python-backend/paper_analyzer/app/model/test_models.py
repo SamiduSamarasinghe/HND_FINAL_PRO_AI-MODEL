@@ -38,7 +38,6 @@ class StructuredQuestion(BaseModel):
     type: QuestionType
     options: Optional[List[str]] = None
     correct_answer: Optional[str] = None
-    topic: str
     subject: str
     source_file: str
     created_at: datetime

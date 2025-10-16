@@ -6,58 +6,46 @@ import re
 
 class QuestionGenerationService:
     def __init__(self):
-        try:
-            base_dir = os.path.dirname(__file__)
-            model_path = os.path.abspath(os.path.join(base_dir, "..", "..", "resources", "mistral-7b-instruct-v0.1.Q4_K_S.gguf"))
+        base_dir = os.path.dirname(__file__)
+        model_path = os.path.abspath(os.path.join(base_dir, "..", "..", "resources", "mistral-7b-instruct-v0.1.Q4_K_S.gguf"))
 
-            print(f"🤖 Loading AI model from: {model_path}")
-            print(f"🤖 Model file exists: {os.path.exists(model_path)}")
-
-            if config.USE_CPU_FOR_AI:
-                self.model = AutoModelForCausalLM.from_pretrained(
-                    model_path,
-                    model_type="mistral",
-                    local_files_only=True,
-                    context_length=2048
-                )
-            else:
-                self.model = AutoModelForCausalLM.from_pretrained(
-                    model_path,
-                    model_type="mistral",
-                    gpu_layers=15,
-                    context_length=2048
-                )
-            print("✅ AI model loaded successfully")
-
-        except Exception as e:
-            print(f"❌ Failed to load AI model: {e}")
-            self.model = None
+        if config.USE_CPU_FOR_AI:
+            self.model = AutoModelForCausalLM.from_pretrained(
+                model_path,
+                model_type="mistral",
+                local_files_only=True,
+                context_length=2048
+            )
+        else:
+            self.model = AutoModelForCausalLM.from_pretrained(
+                model_path,
+                model_type="mistral",
+                gpu_layers=15,
+                context_length=2048
+            )
 
     def generate_questions_from_content(self, content: str, question_types: list, num_questions: int = 10, subject: str = "General"):
+        """
+        Generate new questions from lecture notes or past papers
+        """
         try:
-            if self.model is None:
-                print("❌ AI model not loaded, using fallback")
-                return self._generate_fallback_questions(content, question_types, num_questions, subject)
+            # Limit content to avoid token limits
+            content_sample = self._extract_key_content(content, max_chars=1000)
+            print(f"📝 Extracted key content: '{content_sample}'")
 
-            content_sample = self._extract_key_content(content, max_chars=800)  # Reduce further
-            print(f"📝 Final key content length: {len(content_sample)}")
-
+            # Build prompt for question generation
             prompt = self._build_question_generation_prompt(content_sample, question_types, num_questions, subject)
-            print(f"🤖 Prompt length: {len(prompt)}")
+            print(f"🤖 Generating questions with prompt length: {len(prompt)}")
 
-            # Add timeout and shorter response
-            print("🤖 Starting AI question generation...")
-            response = self.model(prompt, max_new_tokens=400, temperature=0.7)  # Reduced tokens
+            response = self.model(prompt, max_new_tokens=800)  # Reduced tokens
+            print(f"🤖 AI response received: {len(response)} characters")
+            print(f"🤖 AI response preview: {response[:200]}...")
 
-            if not response:
-                print("❌ AI returned empty response")
-                return self._generate_fallback_questions(content, question_types, num_questions, subject)
-
-            print(f"🤖 AI response length: {len(response)}")
             return self._parse_generated_questions(response, question_types, subject)
 
         except Exception as e:
-            print(f"❌ AI generation error: {e}")
+            print(f"❌ Error in question generation: {e}")
+            # Fallback: generate simple questions if AI fails
             return self._generate_fallback_questions(content, question_types, num_questions, subject)
 
     def _extract_key_content(self, content: str, max_chars: int = 1000) -> str:
@@ -109,28 +97,28 @@ class QuestionGenerationService:
 
         prompt = f"""Based on the following educational content about {subject}, generate {num_questions} diverse questions.
 
-CONTENT:
-{content}
-
-INSTRUCTIONS:
-{chr(10).join(instructions)}
-- Focus on key concepts from the content
-- Make questions clear and educational
-- Vary the difficulty levels
-
-FORMAT your response exactly like this for each question:
-
-MCQ: [Question text]
-Options: A) [Option1] B) [Option2] C) [Option3] D) [Option4]
-Answer: [Correct letter]
-
-SHORT_ANSWER: [Question text]
-Answer: [Expected answer key points]
-
-ESSAY: [Question text]
-Points: [Suggested points]
-
-Generate questions now:"""
+        CONTENT:
+        {content}
+        
+        INSTRUCTIONS:
+        {chr(10).join(instructions)}
+        - Focus on key concepts from the content
+        - Make questions clear and educational
+        - Vary the difficulty levels
+        
+        FORMAT your response exactly like this for each question:
+        
+        MCQ: [Question text]
+        Options: A) [Option1] B) [Option2] C) [Option3] D) [Option4]
+        Answer: [Correct letter]
+        
+        SHORT_ANSWER: [Question text]
+        Answer: [Expected answer key points]
+        
+        ESSAY: [Question text]
+        Points: [Suggested points]
+        
+        Generate questions now:"""
 
         return prompt
 
@@ -252,7 +240,6 @@ Generate questions now:"""
                             "type": "MCQ",
                             "options": options,
                             "correct_answer": correct_answer,
-                            "topic": subject,
                             "source": "ai_generated",
                             "points": 2
                         })
@@ -278,7 +265,6 @@ Generate questions now:"""
                             "text": question_text,
                             "type": "Short Answer",
                             "correct_answer": correct_answer,
-                            "topic": subject,
                             "source": "ai_generated",
                             "points": 5
                         })
@@ -306,7 +292,6 @@ Generate questions now:"""
                         structured_questions.append({
                             "text": question_text,
                             "type": "Essay",
-                            "topic": subject,
                             "source": "ai_generated",
                             "points": points
                         })
