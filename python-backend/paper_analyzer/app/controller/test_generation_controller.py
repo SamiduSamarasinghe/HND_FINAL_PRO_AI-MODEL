@@ -83,15 +83,33 @@ async def get_question_types():
         ]
     }
 
-@router.get("/difficulty-levels")
-async def get_difficulty_levels():
+@router.get("/subjects")
+async def get_all_subjects():
     """
-    Get available difficulty levels
+    Get all available subjects from Firebase
     """
-    return {
-        "difficulty_levels": [
-            {"level": "Easy", "description": "Basic concepts"},
-            {"level": "Medium", "description": "Intermediate level"},
-            {"level": "Hard", "description": "Advanced concepts"}
-        ]
-    }
+    try:
+        # Import your Firebase connector
+        from app.config.firebase_connection import FirebaseConnector
+        connector = FirebaseConnector()
+        db = connector.get_connection()
+
+        # Get all subjects from the 'subjects' collection
+        subjects_ref = db.collection("subjects")
+        docs = subjects_ref.stream()
+
+        subjects = []
+        for doc in docs:
+            subject_data = doc.to_dict()
+            subjects.append({
+                "id": doc.id,
+                "name": subject_data.get("name", doc.id),
+                "description": subject_data.get("description", ""),
+                "total_questions": subject_data.get("total_questions", 0)
+            })
+
+        return {"subjects": subjects}
+
+    except Exception as e:
+        print(f"Error fetching subjects: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch subjects: {str(e)}")

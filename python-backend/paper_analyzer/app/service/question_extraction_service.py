@@ -19,33 +19,46 @@ class QuestionExtractionService:
 
     def extract_question_from_firebase(self, subject: str) -> List[Question]:
         """
-        Extract questions from Firebase for a given subject
+        Extract structured questions from Firebase
         """
         try:
-            print(f"Extracting questions for subject: {subject}")
-
-            #fetch all papers for the subject
-            papers_ref = self.db.collection(subject)
-            docs = papers_ref.stream()
+            questions_ref = self.db.collection("questions")
+            query = questions_ref.where("subject", "==", subject)
+            docs = query.stream()
 
             all_questions = []
-            doc_count = 0
 
             for doc in docs:
-                doc_count += 1
                 data = doc.to_dict()
-                if "content" in data:
-                    content = data["content"]
-                    questions = self._parse_questions_from_content(content)
-                    all_questions.extend(questions)
-                    print(f"Document {doc_count}: Found {len(questions)} questions")
 
-            print(f"Extracted {len(all_questions)} questions from {doc_count} documents in {subject}")
-            return  all_questions
+                # Convert to Question model
+                question = Question(
+                    text=data["text"],
+                    type=QuestionType(data["type"]),
+                    points=self._assign_points(data["type"]),
+                    difficulty=Difficulty.MEDIUM,  # Remove difficulty filtering as requested
+                    options=data.get("options"),
+                    correct_answer=data.get("correct_answer")
+                )
+                all_questions.append(question)
+
+            print(f"Extracted {len(all_questions)} structured questions from {subject}")
+            return all_questions
 
         except Exception as e:
-            print(f"Error extracting question: {str(e)}")
+            print(f"Error extracting questions: {str(e)}")
             return []
+
+    def _assign_points(self, question_type: str) -> int:
+        """
+        Assign points based on question type only (no difficulty)
+        """
+        points_map = {
+            "MCQ": 2,
+            "SHORT_ANSWER": 5,
+            "ESSAY": 10
+        }
+        return points_map.get(question_type, 2)
 
     def _parse_questions_from_content(self, content: str) -> List[Question]:
         """
@@ -105,6 +118,7 @@ class QuestionExtractionService:
                 return False
 
         return True
+
     def _classify_question(self, text: str) -> Question:
         """
         Classify question type and difficulty
