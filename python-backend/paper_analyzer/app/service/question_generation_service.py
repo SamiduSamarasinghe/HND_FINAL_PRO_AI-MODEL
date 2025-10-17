@@ -1,4 +1,6 @@
 import os
+from typing import List
+
 import app.config.server_config as config
 from ctransformers import AutoModelForCausalLM
 from app.model.test_models import QuestionType
@@ -50,25 +52,36 @@ class QuestionGenerationService:
 
     def _extract_key_content(self, content: str, max_chars: int = 1000) -> str:
         """
-        Extract the most important content to reduce token usage
+        Extract the most important content from lecturer notes
         """
         # Remove page headers, footers, and unwanted content
         lines = content.split('\n')
         filtered_lines = []
 
+        #Filter out non-educational content
         for line in lines:
             line = line.strip()
             # Skip page headers/footers and very short lines
-            if (len(line) > 10 and
+            if (len(line) > 15 and
                     not line.upper().startswith('POWERUP') and
                     not line.upper().startswith('NIBM') and
                     not line.startswith('===') and
-                    '©' not in line):
+                    '©' not in line and
+                    not re.match(r'^[0-9\s]+$', line) and  # Skip lines with only numbers
+                    not re.match(r'^[A-Z\s]{10,}$', line)  # Skip ALL CAPS headers
+            ):
+
                 filtered_lines.append(line)
 
+        #Join and limit content
         key_content = ' '.join(filtered_lines)
 
-        # Limit to max_chars while creating sentences
+        #If content is still too short, include more context
+        if len(key_content) < 200:
+            #Take first 500 chars as fallback
+            key_content = content[:500]
+
+        # Limit to max_chars while preserving sentences
         if len(key_content) > max_chars:
             # Try to cut at a sentence boundary
             last_period = key_content[:max_chars].rfind('.')
@@ -85,9 +98,9 @@ class QuestionGenerationService:
         Build an optimized prompt that stays within token limits
         """
         type_instructions = {
-            "MCQ": "Create multiple-choice questions with 4 options and indicate correct answer",
-            "Short Answer": "Create short answer questions that test key concepts",
-            "Essay": "Create essay questions that require critical thinking"
+            "MCQ": "Create multiple-choice questions with 4 plausible options and indicate correct answer",
+            "Short Answer": "Create short answer questions that test key concepts and definitions",
+            "Essay": "Create essay questions that require critical thinking and analysis"
         }
 
         instructions = []
@@ -95,22 +108,26 @@ class QuestionGenerationService:
             if q_type in type_instructions:
                 instructions.append(f"- {type_instructions[q_type]}")
 
-        prompt = f"""Based on the following educational content about {subject}, generate {num_questions} diverse questions.
+        # Calculate questions per type
+        questions_per_type = max(1, num_questions // len(question_types))
+
+        prompt = f"""Based on the following lecture note about {subject}, generate {num_questions} diverse educational questions.
 
         CONTENT:
         {content}
         
         INSTRUCTIONS:
         {chr(10).join(instructions)}
-        - Focus on key concepts from the content
-        - Make questions clear and educational
-        - Vary the difficulty levels
+        - Focus on key concepts, definitions, and important facts from the content
+        - Make questions clear, educational, and test-worthy
+        - Vary the difficulty levels (basic recall to analytical thinking)
+        - Ensure questions are directly related to the provided content
         
-        FORMAT your response exactly like this for each question:
+        FORMAT your response EXACTLY like this for each question:
         
         MCQ: [Question text]
         Options: A) [Option1] B) [Option2] C) [Option3] D) [Option4]
-        Answer: [Correct letter]
+        Answer: [Correct letter A/B/C/D]
         
         SHORT_ANSWER: [Question text]
         Answer: [Expected answer key points]
@@ -118,7 +135,7 @@ class QuestionGenerationService:
         ESSAY: [Question text]
         Points: [Suggested points]
         
-        Generate questions now:"""
+        Generate {questions_per_type} questions of each requested type now:"""
 
         return prompt
 
@@ -126,43 +143,207 @@ class QuestionGenerationService:
         """
         Generate simple fallback questions if AI fails
         """
-        print("🔄 Using fallback question generation")
+        print("🔄 Using fallback question generation for lecture notes")
 
         # Extract key topics from content
         topics = self._extract_topics(content)
         questions = []
 
-        for i in range(min(num_questions, 5)):  # Generate 5 fallback questions
-            topic = topics[i % len(topics)] if topics else subject
+        questions_per_type = max(1, num_questions // len(question_types))
 
-            if "MCQ" in question_types:
-                questions.append({
-                    "text": f"What is a key characteristic of {topic}?",
-                    "type": "MCQ",
-                    "options": ["Option A", "Option B", "Option C", "Option D"],
-                    "correct_answer": "A",
-                    "topic": topic,
-                    "source": "ai_generated",
-                    "points": 2
-                })
-            elif "Short Answer" in question_types:
-                questions.append({
-                    "text": f"Explain the importance of {topic} in {subject.lower()}.",
-                    "type": "Short Answer",
-                    "correct_answer": "Key points would be explained here",
-                    "topic": topic,
-                    "source": "ai_generated",
-                    "points": 5
-                })
-            elif "Essay" in question_types:
-                questions.append({
-                    "text": f"Discuss the role and significance of {topic} in {subject.lower()}.",
-                    "type": "Essay",
-                    "topic": topic,
-                    "source": "ai_generated",
-                    "points": 10
-                })
-        return questions
+        for q_type in question_types:
+            for i in range(questions_per_type):
+                topic = topics[i % len(topics)] if topics else subject
+
+                if q_type == "MCQ":
+                    questions.append({
+                        "text": f"What is a key characteristic of {topic} in {subject}?",
+                        "type": "MCQ",
+                        "options": [
+                            f"Primary feature of {topic}",
+                            f"Common misconception about {topic}",
+                            f"Related but different concept",
+                            f"Historical context of {topic}"
+                        ],
+                        "correct_answer": "A",
+                        "topic": topic,
+                        "source": "ai_generated_fallback",
+                        "points": 2
+                    })
+                elif q_type == "Short Answer":
+                    questions.append({
+                        "text": f"Explain the importance of {topic} in {subject}.",
+                        "type": "Short Answer",
+                        "correct_answer": f"Key points about {topic} importance would be explained here",
+                        "topic": topic,
+                        "source": "ai_generated_fallback",
+                        "points": 5
+                    })
+                elif q_type == "Essay":
+                    questions.append({
+                        "text": f"Discuss the role and applications of {topic} in modern {subject}.",
+                        "type": "Essay",
+                        "correct_answer": f"Comprehensive analysis of {topic} applications",
+                        "topic": topic,
+                        "source": "ai_generated_fallback",
+                        "points": 10
+                    })
+        #Exact requested numbers
+        return questions[:num_questions]
+
+    def generate_questions_from_lecture_notes(self, content: str, question_types: list, num_questions: int = 6,
+                                              subject: str = "General"):
+        """
+        Generate questions from lecture notes using chunking and multiple AI calls
+        """
+        try:
+            print("Using chunked processing for lecture notes")
+
+            #Extract content chunks instead of single summary
+            chunks = self._extract_content_chunks(content, max_chunks=5)
+            print(f"Extracted {len(chunks)} content chunks")
+
+            all_questions = []
+            questions_per_chunk = max(1, num_questions // len(chunks))
+
+            #Process each chunk with separate AI call
+            for i, chunk in enumerate(chunks):
+                print(f"Processing chunk {i+1}/{len(chunks)}: {len(chunk)} chars")
+
+                chunk_questions = self._generate_questions_from_chunk(
+                    chunk, question_types, questions_per_chunk, subject, f"Chunk_{i+1}"
+                )
+                all_questions.extend(chunk_questions)
+
+                #Stop if we have enough questions
+                if len(all_questions) >= num_questions:
+                    break
+
+            #Ensure we have at least 2 of each type
+            final_questions = self._balance_question_types(all_questions, question_types, num_questions)
+
+            print(f"Generated {len(final_questions)} questions from {len(chunks)} chunks")
+            return final_questions
+
+        except Exception as e:
+            print(f"❌ Chunked processing failed: {e}")
+            return self._generate_fallback_questions(content, question_types, num_questions, subject)
+
+    def _extract_content_chunks(self, content: str, max_chunks: int = 5) -> List[str]:
+        """
+        Extract meaningful chunks from lecture notes content
+        """
+        chunks = []
+
+        # Split by major sections (headings, page breaks, etc.)
+        sections = re.split(r'\n--- Page Break ---\n|\n# |\n## |\n• |\n- ', content)
+
+        for section in sections:
+            section = section.strip()
+            if len(section) < 50:  # Too short
+                continue
+
+            # Clean the section
+            lines = section.split('\n')
+            cleaned_lines = []
+
+            for line in lines:
+                line = line.strip()
+                # Keep educational content, remove headers/footers
+                if (len(line) > 10 and
+                        not line.upper().startswith('POWERUP') and
+                        not line.upper().startswith('NIBM') and
+                        '©' not in line and
+                        not re.match(r'^Page\s+\d+', line) and
+                        not re.match(r'^\d+$', line)):
+                    cleaned_lines.append(line)
+
+            if cleaned_lines:
+                chunk = ' '.join(cleaned_lines[:10])  # First 10 lines max
+                if len(chunk) > 100:  # Meaningful chunk size
+                    chunks.append(chunk)
+
+        # Limit chunks and ensure minimum size
+        selected_chunks = []
+        for chunk in chunks[:max_chunks]:
+            if len(chunk) > 150:
+                selected_chunks.append(chunk[:800])  # Limit chunk size
+
+        # If no good chunks found, create from sentences
+        if not selected_chunks:
+            sentences = re.split(r'[.!?]+', content)
+            meaningful_sentences = [s.strip() for s in sentences if len(s.strip()) > 30]
+            if meaningful_sentences:
+                chunk = ' '.join(meaningful_sentences[:8])
+                selected_chunks.append(chunk[:1000])
+
+        return selected_chunks if selected_chunks else [content[:1000]]
+
+    def _generate_questions_from_chunk(self, chunk: str, question_types: list, num_questions: int, subject: str, chunk_id: str):
+        """
+        Generate questions from a single content chunk
+        """
+        try:
+            # Simple, focused prompt for each chunk
+            prompt = f"""Based on this educational content about {subject}, create {num_questions} test questions:
+    
+            CONTENT: {chunk}
+            
+            Create questions that:
+            - Test understanding of key concepts
+            - Are clear and educational
+            - Cover different difficulty levels
+            
+            Format each as:
+            MCQ: [Question]  
+            Options: A) [A] B) [B] C) [C] D) [D]
+            Answer: [Letter]
+            
+            SHORT_ANSWER: [Question]
+            Answer: [Key points]
+            
+            ESSAY: [Question]  
+            Points: [10]
+            
+            Create questions now:"""
+
+            print(f"Generating from chunk {chunk_id} ({len(chunk)} chars)")
+            response = self.model(prompt, max_new_tokens=400, temperature=0.7)
+
+            if response and len(response.strip()) > 50:
+                questions = self._parse_generated_questions(response, question_types, subject)
+                print(f"Chunk {chunk_id}: Generated {len(questions)} questions")
+                return questions
+            else:
+                print(f"Chunk {chunk_id}: AI returned empty response")
+                return []
+
+        except Exception as e:
+            print(f"Chunk {chunk_id} processing error: {e}")
+            return []
+
+    def _balance_question_types(self, questions: list, question_types: list, target_count: int):
+        """
+        Ensure we have balanced question types
+        """
+        if not questions:
+            return self._generate_fallback_questions("", question_types, target_count, "General")
+
+        # Count questions by type
+        type_counts = {q_type: 0 for q_type in question_types}
+        for q in questions:
+            if q['type'] in type_counts:
+                type_counts[q['type']] += 1
+
+        print(f"Question distribution: {type_counts}")
+
+        # If we don't have enough questions, generate more
+        if len(questions) < target_count:
+            needed = target_count - len(questions)
+            additional = self._generate_fallback_questions("", question_types, needed, "General")
+            questions.extend(additional)
+
+        return questions[:target_count]
 
     def _extract_topics(self, content: str) -> list:
         """Extract key topics from content for fallback questions"""
@@ -368,3 +549,29 @@ class QuestionGenerationService:
                 })
 
         return questions
+
+    def extract_lecture_key_points(text: str) -> List[str]:
+        """
+        Extract key points from lecture notes for question generation
+        """
+        key_points = []
+
+        # Split into sentences
+        sentences = re.split(r'[.!?]+', text)
+
+        for sentence in sentences:
+            sentence = sentence.strip()
+            if len(sentence) < 20 or len(sentence) > 300:
+                continue
+
+            # Look for definition patterns
+            if re.match(r'.*\b(is|are|means|refers to|defined as)\b', sentence, re.IGNORECASE):
+                key_points.append(sentence)
+            # Look for important statements
+            elif re.match(r'.*\b(important|key|essential|crucial|significance|advantage|disadvantage)\b', sentence, re.IGNORECASE):
+                key_points.append(sentence)
+            # Look for list items and bullet points
+            elif re.match(r'^[•\-*]\s+', sentence) or re.match(r'^\d+\.\s+', sentence):
+                key_points.append(sentence)
+
+        return key_points[:10]  # Return top 10 key points

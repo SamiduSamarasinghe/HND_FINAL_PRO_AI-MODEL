@@ -38,7 +38,7 @@ async def process_pdf(isPaper: bool, file: UploadFile, subject: str):
                 # For past papers: classify existing questions
                 if cleaned_questions:
                     structured_questions = classify_and_structure_questions(cleaned_questions)
-                    print(f"🏷️ Structured {len(structured_questions)} existing questions")
+                    print(f"Structured {len(structured_questions)} existing questions")
 
                 # Always generate new questions to ensure we have content
                 new_questions = question_generator.generate_questions_from_content(
@@ -46,30 +46,39 @@ async def process_pdf(isPaper: bool, file: UploadFile, subject: str):
                     question_types=["MCQ", "Short Answer", "Essay"],
                     num_questions=8  # Reduced for stability
                 )
-                print(f"🧠 Generated {len(new_questions)} new AI questions")
+                print(f"Generated {len(new_questions)} new AI questions")
 
                 # Combine questions
                 all_questions = structured_questions + new_questions
-                print(f"📚 Total questions: {len(all_questions)}")
+                print(f"Total questions: {len(all_questions)}")
 
             else:
                 # For lecture notes: Generate questions from content only
-                print("📖 Processing as lecture notes - generating questions from content")
+                print("Processing as lecture notes - generating questions from content")
 
-                new_questions = question_generator.generate_questions_from_content(
+                # Try AI generation first
+                new_questions = question_generator.generate_questions_from_lecture_notes(
                     content=full_text,
                     question_types=["MCQ", "Short Answer", "Essay"],
-                    num_questions=8,  # More questions for lecture notes
+                    num_questions=6,  # Target more questions
                     subject=subject
                 )
-                print(f"🧠 Generated {len(new_questions)} questions from lecture notes")
+
+                # If AI fails, use fallback
+                if not new_questions:
+                    print("AI generation failed, using fallback questions")
+                    new_questions = question_generator._generate_fallback_questions(
+                        full_text, ["MCQ", "Short Answer", "Essay"], 6, subject
+                    )
+
+                print(f"Generated {len(new_questions)} questions from lecture notes")
                 all_questions = new_questions
 
             # If no questions were generated, create fallback questions
             if not all_questions:
                 print("⚠️ No questions generated, creating fallback questions")
                 all_questions = question_generator._generate_fallback_questions(
-                    full_text, ["MCQ", "Short Answer", "Essay"], 5
+                    full_text, ["MCQ", "Short Answer", "Essay"], 5, subject
                 )
                 print(f"🔄 Created {len(all_questions)} fallback questions")
 
