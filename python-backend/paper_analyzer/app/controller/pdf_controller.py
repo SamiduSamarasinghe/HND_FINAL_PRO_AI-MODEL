@@ -1,10 +1,6 @@
 from fastapi import APIRouter,UploadFile, File, HTTPException, Form, Query
 from app.service.pdf_service import process_pdf
-from app.service.frequency_analyizer import analyseFrequentlyAskedQuestions
-from fastapi.responses import JSONResponse
-from fastapi.responses import StreamingResponse
-import asyncio
-
+from app.service.frequency_analyizer import analyse_frequent_questions
 
 
 router = APIRouter()
@@ -29,45 +25,18 @@ async def upload_file(
     except Exception as error:
         print(f"Controller error: {error}")
         return f"Reading Failed: {str(error)}"
-        return f"Reading Failed: {(error)}"
     
 
-#testing method for return progress updates
-async def pdf_reader_progress_updates(isPaper: bool,file:UploadFile=File(...)):
-    yield "data: Processing started...\n\n"
-    await asyncio.sleep(1)
-
-    # Step 2
-    yield "data: Validating PDF...\n\n"
-    await asyncio.sleep(1)
-
-    # Step 3
-    yield "data: Extracting text...\n\n"
-    await asyncio.sleep(1)
-
-    # Step 4
-    yield "data: Cleaning data...\n\n"
-    
 #this method should be update to require type of paper to be analyse
 #http://localhost:[port]/pdf-reader/analyse?subject=statistics-papers
 @router.get("/pdf-reader/analyse")
-async def analyseFrequentAskedQuestions(subject: str = None):
+async def analyse_frequent_questions(subject: str = None):
     try:
         print("start analysing")
         if(subject is None):
             return "impelment analyse all subjects"
         else:
-            return analyseFrequentlyAskedQuestions(subject)
+            return analyse_frequent_questions(subject)
     except Exception as e:
         print("Error :",str(e))
         return "Server Error"
-
-
-
-@router.get("/pdf-reader/health")
-async def checkHealth():
-    try:
-        return  JSONResponse(status_code=200,content={"details":"Running"})
-    except Exception as e:
-        print("Error :",str(e))
-        return JSONResponse(status_code=503,content={"details":"Server Unavailable"})

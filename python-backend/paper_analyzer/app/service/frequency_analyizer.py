@@ -105,22 +105,6 @@ def is_proper_question(text: str):
     
     return True
 
-"""
-def get_frequent_questions(all_contents):
-    
-    Count frequency of each question across all papers.
-    Returns a Counter object.
-    
-    all_questions = []
-    for content in all_contents:
-        questions = extract_questions_from_content(content)
-        # Filter and normalize
-        proper_questions = [normalize_question(q) for q in questions if is_proper_question(q)]
-        all_questions.extend(proper_questions)
-    
-    freq_counter = Counter(all_questions)
-    return freq_counter
-"""
 
 def debug_extraction(subject):
     """
@@ -209,7 +193,7 @@ def get_frequent_questions(all_contents, threshold=85):
     return freq_counter, similarity_log
 
 
-def analyseFrequentlyAskedQuestions(subject,similarity_threshold=85):
+def analyse_frequent_questions(subject,similarity_threshold=85):
     """
     Analyzes and finds frequently asked questions using fuzzy matching.
     Shows similarity values and calculates reappearance probability for repeated questions only.
@@ -264,29 +248,6 @@ def analyseFrequentlyAskedQuestions(subject,similarity_threshold=85):
         print("\n=== ALL PROPER QUESTIONS (showing top 20) ===")
         for question, count in freq_counter.most_common(20):
             print(f"{count} times: {question}")
-
-    """
-    # Save results to file
-    with open("frequent_questions.txt", "w", encoding="utf-8") as f:
-        f.write("=== FREQUENTLY ASKED QUESTIONS ANALYSIS (Fuzzy Matching with Similarity) ===\n")
-        f.write(f"Total papers analyzed: {total_papers}\n")
-        f.write(f"Total unique proper questions found: {total_unique_questions}\n")
-        f.write(f"Questions appearing more than once: {repeated_count} ({repeated_percentage:.2f}%)\n")
-        f.write(f"Average estimated chance of reappearing (for repeated questions): {avg_reappearance_chance:.2f}%\n\n")
-
-        if repeated_questions:
-            f.write("=== FREQUENTLY REPEATED QUESTIONS ===\n")
-            for question_data in repeated_questions_list:
-                f.write(f"{question_data['count']} times: {question_data['question']}\n")
-        else:
-            f.write("No proper questions appeared more than once\n\n")
-            f.write("=== ALL PROPER QUESTIONS (top 20) ===\n")
-            for question, count in freq_counter.most_common(20):
-                f.write(f"{count} times: {question}\n")
-
-    print(f"\nResults saved to 'frequent_questions.txt' (includes similarity log)")
-
-    """
 
     return {
         "total_papers": total_papers,
