@@ -75,3 +75,60 @@ def get_questions_by_subject(subject: str, limit: int = 50):
     except Exception as error:
         print(f"Error fetching questions: {error}")
         return []
+
+
+#return question and there sources for specific subject
+def get_questions_and_sources(subject):
+    try:
+        docs = (__db.collection("questions")
+                .select(["text", "source_file", "source"])
+                .where("subject", "==", subject)
+                .stream())
+
+        results = []
+
+        for doc in docs:
+            data = doc.to_dict()
+            text = data.get("text", "No text")
+            source_file = data.get("source_file", "Unknown source")
+            source = data.get("source")
+
+            results.append((text, source_file))
+
+            # debug
+            if source == "extracted" or not source:  # None or ""
+                print(f"[{source_file}] {text} (source: {source})")
+
+        return results
+
+    except Exception as error :
+        print(f"Error fetching questions: {error}")
+        return []
+
+#return all available questions with there source and subject
+def get_all_questions_and_sources():
+    try:
+        qurry = ((__db.collection("questions")
+                 .select(["text","source_file","source","subject"]))
+                 .stream())
+
+        results = []
+
+        for doc in qurry:
+            data = doc.to_dict()
+            text = data.get("text", "No text")
+            source_file = data.get("source_file", "Unknown source")
+            source = data.get("source")
+            subject = data.get("subject")
+
+            results.append((text, source_file,subject))
+
+            # debug
+            if source == "extracted" or not source:  # None or ""
+                print(f"{subject}-[{source_file}] {text} (source: {source})")
+
+        return results
+
+    except Exception as error:
+        print(f"Error fetching questions: {error}")
+        return []
