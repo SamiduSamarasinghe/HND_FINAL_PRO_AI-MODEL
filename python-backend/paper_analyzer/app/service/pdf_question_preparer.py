@@ -97,67 +97,149 @@ def normalizePdfQuestions(pages, n_header_lines=9):
 
 def splitQuestions(text):
     """
-    Splits text into individual questions based on patterns.
+    Improved question splitting with better boundary detection
     """
     global _questionsList
     _questionsList = []  # Reset before adding
 
+    # Enhanced pattern for question detection
     pattern = re.compile(r"""
-        ^(?:
-            Question\s+No\.?\d+  |  # "Question No.1"
-            \d+\.\s+              |  # "1. "
-            \(\d+\)\s+            |  # "(1) "
-            [a-z]\)\s+            |  # "a) "
-            [ivx]+\.\s+           |  # "i. ", "ii. "
-            \d+\)\s+              |  # "1) "
-            [A-Z]\.\s+            |  # "A. "
-            Question\s*:?\s*      |  # "Question:"
-            Q\.?\d+\.?            |  # "Q1", "Q.1"
-            Part\s+[A-Z]          |  # "Part A"
-            Section\s+[A-Z]         # "Section A"
+        ^(?:                                  
+            Question\s+No\.?\s*\d+          |  # "Question No 1", "Question No.1"
+            \b\d+[\.\)]\s+                  |  # "1. ", "1) "
+            \(\d+\)\s+                      |  # "(1) "
+            [a-z]\)\s+                      |  # "a) "
+            [ivx]+\.\s+                     |  # "i. ", "ii. "
+            \b[Qq]\.?\s*\d+\.?\s*          |  # "Q1", "Q.1", "q1"
+            Question\s*:?\s*               |  # "Question:", "Question"
+            Part\s+[A-Z]\s+                |  # "Part A"
+            Section\s+[A-Z]\s+             |  # "Section A"
+            \b[A-D]\.\s+                   |  # "A. ", "B. " (for MCQs)
+            \bANSWER\s+THE\s+FOLLOWING     |  # "ANSWER THE FOLLOWING"
+            \b[A-Z][A-Z\s]+\:               # Uppercase headings followed by colon
         )
     """, re.MULTILINE | re.IGNORECASE | re.VERBOSE)
 
-    matches = list(pattern.finditer(text))
+    # Split by major sections first
+    sections = re.split(r'(?:Section|Part)\s+[A-Z]', text, flags=re.IGNORECASE)
 
-    # cleaners
-    #  
-    # matches "Question", "Question No"
-    question_label_line = re.compile(r'^\s*Question\s*(?:No\.?\s*)?\d+\s*[:.)-]?\s*$', re.IGNORECASE | re.MULTILINE)
-
-    # matches "Question No. 12" 
-    clean_prefix = re.compile(r'^\s*Question\s*(?:No\.?\s*)?\d+\s*[:.)-]?\s*', re.IGNORECASE)
-
-    # match"--------" (line by itself)
-    dashed_line = re.compile(r'^\s*-{2,}\s*$', re.MULTILINE)
-
-    # match signle leftover brackets "[" or "]"
-    bracket_line = re.compile(r'^\s*[\[\]]\s*$', re.MULTILINE)
-
-    for i, match in enumerate(matches):
-        start = match.start()
-        end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
-        question_text = text[start:end].strip()
-
-        question_text = dashed_line.sub('', question_text)
-        question_text = bracket_line.sub('', question_text)
-        question_text = question_label_line.sub('', question_text)
-        question_text = clean_prefix.sub('', question_text).strip()
-
-        # collapse multiple blank lines
-        question_text = re.sub(r'\n\s*\n+', '\n\n', question_text).strip()
-
-        if not question_text:
-            continue
-        if question_label_line.fullmatch(question_text):  # still just "Question N"
-            continue
-        if len(question_text.split()) < 2:  # tiny garbage (adjust threshold if needed)
+    for section in sections:
+        if not section.strip():
             continue
 
-        _questionsList.append(question_text)
+        matches = list(pattern.finditer(section))
 
-    # Print all extracted questions
+        if not matches:
+            # If no clear questions, try to split by line breaks for very clear separations
+            potential_questions = re.split(r'\n\s*\n', section)
+            for pq in potential_questions:
+                pq = pq.strip()
+                if len(pq) > 20 and len(pq) < 500:  # Reasonable question length
+                    _questionsList.append(pq)
+            continue
+
+        for i, match in enumerate(matches):
+            start = match.start()
+            end = matches[i + 1].start() if i + 1 < len(matches) else len(section)
+            question_text = section[start:end].strip()
+
+            # Clean the question text
+            question_text = clean_single_question(question_text)
+
+            if is_valid_individual_question(question_text):
+                _questionsList.append(question_text)
+
     printQuestions()
+
+def clean_single_question(text):
+    """Clean individual question text"""
+    # Remove common prefixes
+    prefixes = [
+        r'^\s*Question\s*(?:No\.?\s*)?\d+\s*[:.)-]?\s*',
+        r'^\s*[Qq]\.?\s*\d+\s*[:.)]?\s*',
+        r'^\s*\d+[\.\)]\s*',
+        r'^\s*[a-z]\)\s*'
+    ]
+
+    for prefix in prefixes:
+        text = re.sub(prefix, '', text)
+
+    # Remove extra whitespace and normalize
+    text = re.sub(r'\s+', ' ', text)
+    text = text.strip()
+
+    return text
+
+def is_valid_individual_question(text):
+    """
+    Validate if this is a proper individual question
+    """
+    if not text or len(text) < 15:
+        return False
+
+    # Too long probably means multiple questions concatenated
+    if len(text) > 500:
+        return False
+
+    # Should contain question indicators
+    question_indicators = [
+        'what', 'how', 'why', 'explain', 'describe', 'discuss',
+        'calculate', 'find', 'determine', 'list', 'name', 'compare'
+    ]
+
+    text_lower = text.lower()
+    if not any(indicator in text_lower for indicator in question_indicators):
+        return False
+
+    # Should not be all uppercase (probably a heading)
+    if text.isupper():
+        return False
+
+    return True
+
+def is_valid_question(text):
+    """
+    Enhanced validation to filter out content vs actual questions
+    """
+    if not text or len(text.strip()) < 15:
+        return False
+
+    # Length-based filtering
+    text_length = len(text.strip())
+    if text_length > 800:  # Too long - probably content
+        return False
+    if text_length < 25:   # Too short - probably fragment
+        return False
+
+    # Content pattern detection
+    content_indicators = [
+        'following are', 'as follows', 'below:', 'the following',
+        'example:', 'for example', 'such as', 'including',
+        'note:', 'important:', 'remember:', 'key points',
+        'definition:', 'concept:', 'introduction', 'summary'
+    ]
+
+    text_lower = text.lower()
+    if any(indicator in text_lower for indicator in content_indicators):
+        return False
+
+    # Question pattern detection
+    question_indicators = [
+        'what', 'how', 'why', 'when', 'where', 'which',
+        'explain', 'describe', 'discuss', 'compare', 'contrast',
+        'calculate', 'find', 'determine', 'list', 'name',
+        'advantages', 'disadvantages', 'benefits', 'drawbacks'
+    ]
+
+    if not any(indicator in text_lower for indicator in question_indicators):
+        return False
+
+    # Should not be just a statement
+    if text_lower.endswith('.') and not any(word in text_lower for word in ['?', 'explain', 'describe', 'discuss']):
+        # If it ends with period and doesn't have question words, might be statement
+        return False
+
+    return True
 
 
 #for debuging
