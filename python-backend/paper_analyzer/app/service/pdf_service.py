@@ -106,3 +106,27 @@ async def process_pdf(isPaper: bool, file: UploadFile, subject: str):
         import traceback
         traceback.print_exc()
         return f"Processing failed: {str(error)}"
+
+
+async def read_pdf_file(file:UploadFile):
+    if file is not None:
+
+        contents = await file.read()
+        pdf_stream = BytesIO(contents)
+        doc = fitz.open(stream=pdf_stream, filetype="pdf")
+
+        # Extract text from all pages
+        all_pages_text = []
+        for page_index, page in enumerate(doc):
+            text = page.get_text()
+            all_pages_text.append(text)
+            print(f" Page {page_index + 1}: {len(text)} characters")
+
+        full_text = "\n--- Page Break ---\n".join(all_pages_text)
+        print(f"Total text extracted: {len(full_text)} characters")
+
+        # Get cleaned questions (for past papers)
+        cleaned_questions = get_clean_questions(full_text)
+        print(f" Found {len(cleaned_questions)} cleaned questions")
+
+    return cleaned_questions

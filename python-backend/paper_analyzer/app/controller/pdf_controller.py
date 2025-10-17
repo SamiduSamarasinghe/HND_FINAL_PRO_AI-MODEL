@@ -27,16 +27,19 @@ async def upload_file(
         return f"Reading Failed: {str(error)}"
     
 
-#this method should be update to require type of paper to be analyse
-#http://localhost:[port]/pdf-reader/analyse?subject=statistics-papers
-@router.get("/pdf-reader/analyse")
-async def analyse_frequent_questions(subject: str = None):
+#http://localhost:[port]/pdf-reader/analyze?subject=statistics
+@router.get("/pdf-reader/analyze")
+async def analyse_questions(subject: str = None,file: UploadFile = File(None)):
     try:
         print("start analysing")
-        if(subject is None):
-            return "impelment analyse all subjects"
+        if(subject is None and file is None):
+            #TODO:analyse all type of papers give out over all analysis
+            return await analyse_frequent_questions()
+
+        if(file is None):
+            return await analyse_frequent_questions(subject)
         else:
-            return analyse_frequent_questions(subject)
+            return await analyse_frequent_questions(subject,file)
     except Exception as e:
         print("Error :",str(e))
         return "Server Error"
