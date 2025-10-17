@@ -28,7 +28,7 @@ async def upload_file(
     
 
 #http://localhost:[port]/pdf-reader/analyze?subject=statistics
-@router.get("/pdf-reader/analyze")
+@router.post("/pdf-reader/analyze")
 async def analyse_questions(subject: str = None,file: UploadFile = File(None)):
     try:
         print("start analysing")
