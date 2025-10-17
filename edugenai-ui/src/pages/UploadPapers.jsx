@@ -22,6 +22,7 @@ const UploadPapers = () => {
     const [file, setFile] = useState(null);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [analysisResult, setAnalysisResult] = useState(null);
+    const [similarityResult, setSimilarityResult] = useState(null);
     const [subject, setSubject] = useState("");
     const [openDialog, setOpenDialog] = useState(false);
     const [error, setError] = useState('');
@@ -54,13 +55,14 @@ const UploadPapers = () => {
         setIsAnalyzing(true);
         setError('');
         setAnalysisResult(null);
+        setSimilarityResult(null);
 
         try {
             const formData = new FormData();
             formData.append('file', file);
 
+            // First API call
             const url = `http://localhost:8088/api/v1/pdf-reader?isPaper=true&subject=${encodeURIComponent(subject)}`;
-
             const response = await fetch(url, {
                 method: 'POST',
                 body: formData,
@@ -81,11 +83,46 @@ const UploadPapers = () => {
             setAnalysisResult(result);
             console.log('Upload result:', result);
 
+            // Second API call after first one completes
+            await callSimilarityAnalysis(file, subject);
+
         } catch (err) {
             setError(err.message);
             console.error('Upload error:', err);
         } finally {
             setIsAnalyzing(false);
+        }
+    };
+
+    const callSimilarityAnalysis = async (file, subject) => {
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const similarityUrl = `http://127.0.0.1:8088/api/v1/pdf-reader/analyze?subject=${encodeURIComponent(subject)}`;
+            const response = await fetch(similarityUrl, {
+                method: 'POST', 
+                body: formData, // Include the file in the request
+            });
+
+            if (!response.ok) {
+                let errorMessage = 'Similarity analysis failed';
+                try {
+                    const errorData = await response.json();
+                    errorMessage = errorData.detail || errorData.message || JSON.stringify(errorData);
+                } catch (parseError) {
+                    errorMessage = `Server error: ${response.status} ${response.statusText}`;
+                }
+                throw new Error(errorMessage);
+            }
+
+            const similarityData = await response.json();
+            setSimilarityResult(similarityData);
+            console.log('Similarity result:', similarityData);
+
+        } catch (err) {
+            console.error('Similarity analysis error:', err);
+            // Don't set error state here to avoid overriding successful first call
         }
     };
 
@@ -97,7 +134,21 @@ const UploadPapers = () => {
         setFile(null);
         setSubject('');
         setAnalysisResult(null);
+        setSimilarityResult(null);
         setError('');
+    };
+
+    // Helper function to safely get message text
+    const getMessageText = (result) => {
+        if (!result || !result.message) return 'Document processed successfully';
+        
+        // If message is an object, try to extract the text
+        if (typeof result.message === 'object') {
+            return result.message.message || JSON.stringify(result.message);
+        }
+        
+        // If message is a string, return it directly
+        return result.message;
     };
 
     return (
@@ -185,9 +236,9 @@ const UploadPapers = () => {
                             />
                         </Box>
 
-                        {/* FIXED: Properly access the message property */}
+                        {/* FIXED: Use helper function to safely get message text */}
                         <Typography color="text.secondary" gutterBottom>
-                            {analysisResult.message || 'Document processed successfully'}
+                            {getMessageText(analysisResult)}
                         </Typography>
 
                         <Divider sx={{ my: 2 }} />
@@ -199,7 +250,7 @@ const UploadPapers = () => {
                             <Button
                                 size="small"
                                 startIcon={<ContentCopy />}
-                                onClick={() => copyToClipboard(analysisResult.message || 'Processing complete')}
+                                onClick={() => copyToClipboard(getMessageText(analysisResult))}
                                 sx={{ position: 'absolute', right: 0, top: 0 }}
                             >
                                 Copy
@@ -219,13 +270,45 @@ const UploadPapers = () => {
                                 )}
                                 {analysisResult.note && (
                                     <Box sx={{ mt : 1 }}>
-                                        <Typography variant="body2" color="text.secondry">
+                                        <Typography variant="body2" color="text.secondary">
                                             {analysisResult.note}
                                         </Typography>
                                     </Box>
                                 )}
                             </Typography>
                         </Box>
+
+                        {/* Similarity Analysis Results */}
+                        {similarityResult && (
+                            <>
+                                <Divider sx={{ my: 2 }} />
+                                <Typography variant="h6" gutterBottom>
+                                    Similarity Analysis Results
+                                </Typography>
+                                <Box sx={{ maxHeight: 400, overflow: 'auto', bgcolor: '#f9f9f9', p: 2, borderRadius: 1 }}>
+                                    {Object.entries(similarityResult).map(([question, matches], index) => (
+                                        <Box key={index} sx={{ mb: 3, p: 2, border: '1px solid #e0e0e0', borderRadius: 1 }}>
+                                            <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+                                                {question}
+                                            </Typography>
+                                            {matches.map((match, matchIndex) => (
+                                                <Box key={matchIndex} sx={{ ml: 2, mb: 1, p: 1, bgcolor: 'white', borderRadius: 1 }}>
+                                                    <Typography variant="body2">
+                                                        <strong>Existing Question:</strong> {match.existing_question}
+                                                    </Typography>
+                                                    <Typography variant="body2">
+                                                        <strong>Source File:</strong> {match.source_file}
+                                                    </Typography>
+                                                    <Typography variant="body2">
+                                                        <strong>Similarity:</strong> {(match.similarity * 100).toFixed(2)}%
+                                                    </Typography>
+                                                </Box>
+                                            ))}
+                                        </Box>
+                                    ))}
+                                </Box>
+                            </>
+                        )}
 
                         <Stack direction="row" spacing={2} sx={{ mt: 3 }}>
                             <Button
