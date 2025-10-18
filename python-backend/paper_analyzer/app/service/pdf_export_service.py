@@ -161,7 +161,7 @@ class PDFExportService:
         points_map = {
             "MCQ": 2,
             "Short Answer": 5,
-            "Essay": 8
+            "Essay": 10
         }
         return points_map.get(question_type, 2)
 
@@ -170,7 +170,7 @@ class PDFExportService:
         points_map = {
             "MCQ": 2,
             "Short Answer": 5,
-            "Essay": 8
+            "Essay": 10
         }
         return points_map.get(question_type, 2)
 

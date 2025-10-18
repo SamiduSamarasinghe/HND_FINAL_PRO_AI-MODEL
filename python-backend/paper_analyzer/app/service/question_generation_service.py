@@ -1,4 +1,5 @@
 import os
+from logging.config import valid_ident
 from typing import List
 
 import app.config.server_config as config
@@ -43,7 +44,23 @@ class QuestionGenerationService:
             print(f"🤖 AI response received: {len(response)} characters")
             print(f"🤖 AI response preview: {response[:200]}...")
 
-            return self._parse_generated_questions(response, question_types, subject)
+            questions = self._parse_generated_questions(response, question_types, subject)
+            #Filter out incomplete questions
+            valid_questions = self._filter_incomplete_questions(questions)
+
+            #If no valid MCQs but MCQ was requested, adjust question types
+            if "MCQ" in question_types:
+                mcq_count = len([q for q in valid_questions if q.get('type') == 'MCQ'])
+                if mcq_count == 0:
+                    print("⚠️ No valid MCQs generated, adjusting question types...")
+                    #Remove MCQ from requested types for fallback
+                    fallback_types = [qt for qt in question_types if qt != "MCQ"]
+                    if fallback_types:
+                        print(f"🔄 Using fallback types: {fallback_types}")
+                        return self._generate_fallback_questions(content, fallback_types, num_questions, subject)
+
+
+            return valid_questions
 
         except Exception as e:
             print(f"❌ Error in question generation: {e}")
@@ -111,8 +128,20 @@ class QuestionGenerationService:
         # Calculate questions per type
         questions_per_type = max(1, num_questions // len(question_types))
 
-        prompt = f"""Based on the following lecture note about {subject}, generate {num_questions} diverse educational questions.
+        prompt = f"""IMPORTANT: Generate COMPLETE, READY-TO-USE questions. Follow these rules STRICTLY:
+        
+        CRITICAL RULES FOR MCQ:
+        - Create EXACTLY 4 options for each MCQ
+        - All options must be meaningful and plausible
+        - NEVER leave options empty or use placeholders
+        - Ensure question text is complete and clear
+        
+        CRITICAL RULES FOR ALL QUESTIONS:
+        - NEVER use placeholder text like '[Question text]'
+        - Ensure questions are fully formed and test-worthy
+        - Make questions directly related to the content
 
+        
         CONTENT:
         {content}
         
@@ -125,11 +154,11 @@ class QuestionGenerationService:
         
         FORMAT your response EXACTLY like this for each question:
         
-        MCQ: [Question text]
+        MCQ: [Complete question text]
         Options: A) [Option1] B) [Option2] C) [Option3] D) [Option4]
         Answer: [Correct letter A/B/C/D]
         
-        SHORT_ANSWER: [Question text]
+        SHORT_ANSWER: [Complete question text]
         Answer: [Expected answer key points]
         
         ESSAY: [Question text]
@@ -160,10 +189,10 @@ class QuestionGenerationService:
                         "text": f"What is a key characteristic of {topic} in {subject}?",
                         "type": "MCQ",
                         "options": [
-                            f"Primary feature of {topic}",
-                            f"Common misconception about {topic}",
-                            f"Related but different concept",
-                            f"Historical context of {topic}"
+                            f"Primary feature and main purpose of {topic}",
+                            f"Common misconception about {topic} implementation",
+                            f"Related but fundamentally different concept from {topic}",
+                            f"Historical development context of {topic}"
                         ],
                         "correct_answer": "A",
                         "topic": topic,
@@ -378,10 +407,10 @@ class QuestionGenerationService:
         structured_questions = []
 
         if not response or len(response.strip()) < 50:
-            print("❌ AI response too short or empty")
+            print("AI response too short or empty")
             return []
 
-        print(f"📄 Parsing AI response: {response[:200]}...")
+        print(f"Parsing AI response: {response[:200]}...")
 
         lines = response.strip().split('\n')
         i = 0
@@ -575,3 +604,46 @@ class QuestionGenerationService:
                 key_points.append(sentence)
 
         return key_points[:10]  # Return top 10 key points
+
+    def _validate_mcq_question(self, question_data: dict) -> bool:
+        """Validate MCQ question has complete options"""
+        if question_data.get('type') != 'MCQ':
+            return True
+
+        options = question_data.get('options', [])
+
+        #Must have exactly 4 options
+        if len(options) != 4:
+            print(f"MCQ validation failed: Expected 4 options, got {len(options)}")
+            return False
+
+        #All options must have meaningful content
+        for i, option in enumerate(options):
+            if not option or len(option.strip()) < 2 or option.strip() in ['', 'Option A', 'Option B', 'Option C', 'Option D']:
+                print(f"MCQ validation failed: Option {i} is invalid: '{option}'")
+                return False
+
+        # Question text must be complete
+        question_text = question_data.get('text', '')
+        if not question_text or '[Question text]' in question_text or len(question_text.strip()) < 10:
+            print(f"MCQ validation failed: Invalid question text: '{question_text}'")
+            return False
+
+        return True
+
+    def _filter_incomplete_questions(self, questions: list) -> list:
+        """Remove incomplete questions from the list"""
+        valid_questions = []
+        for q in questions:
+            if q.get('type') == 'MCQ':
+                if self._validate_mcq_question(q):
+                    valid_questions.append(q)
+                else:
+                    print(f"Filtered out incomplete MCQ: {q.get('text', '')[:50]}...")
+            else:
+                #For non-MCQ, basic validation
+                if q.get('text') and len(q.get('text', '').strip()) > 10:
+                    valid_questions.append(q)
+
+        print(f"Question filtering: {len(questions)} → {len(valid_questions)} valid questions")
+        return valid_questions
