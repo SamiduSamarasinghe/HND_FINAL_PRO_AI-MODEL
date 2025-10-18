@@ -51,7 +51,7 @@ const QuestionBank = () => {
             setLoading(true);
             setError('');
 
-            console.log('🔄 Fetching data from backend...');
+            console.log('Fetching data from backend...');
 
             // First, try to get subjects
             const subjectsResponse = await fetch('http://localhost:8088/api/v1/subjects');
@@ -61,7 +61,7 @@ const QuestionBank = () => {
             }
 
             const subjectsData = await subjectsResponse.json();
-            console.log('📚 Subjects response:', subjectsData);
+            console.log('Subjects response:', subjectsData);
 
             let subjectNames = [];
             if (subjectsData.subjects && subjectsData.subjects.length > 0) {
@@ -74,13 +74,13 @@ const QuestionBank = () => {
             }
 
             setSubjects(subjectNames);
-            console.log('📝 Available subjects:', subjectNames);
+            console.log('Available subjects:', subjectNames);
 
             // Fetch all questions
             await fetchAllQuestions(subjectNames);
 
         } catch (err) {
-            console.error('❌ Error fetching data:', err);
+            console.error('Error fetching data:', err);
             setError(`Failed to load data: ${err.message}. Please check if the backend is running on port 8088.`);
         } finally {
             setLoading(false);
@@ -104,50 +104,57 @@ const QuestionBank = () => {
     };
 
     // Fetch all questions
-    const fetchAllQuestions = async (subjectNames) => {
+    // In QuestionBank.jsx - update the fetchAllQuestions function
+    const fetchAllQuestions = async () => {
         try {
-            let allQuestions = [];
+            setLoading(true);
+            setError('');
 
-            // Try direct questions endpoint first
+            console.log('Fetching data from backend...');
+
+            // First, get subjects
+            const subjectsResponse = await fetch('http://localhost:8088/api/v1/subjects');
+
+            if (!subjectsResponse.ok) {
+                throw new Error(`Failed to fetch subjects: ${subjectsResponse.status}`);
+            }
+
+            const subjectsData = await subjectsResponse.json();
+            console.log('Subjects response:', subjectsData);
+
+            let subjectNames = [];
+            if (subjectsData.subjects && subjectsData.subjects.length > 0) {
+                subjectNames = subjectsData.subjects.map(subject =>
+                    typeof subject === 'string' ? subject : subject.name || subject.id
+                );
+            }
+
+            setSubjects(subjectNames);
+            console.log('Available subjects:', subjectNames);
+
+            // Try to get all questions directly
+            let allQuestions = [];
             try {
                 const questionsResponse = await fetch('http://localhost:8088/api/v1/questions');
                 if (questionsResponse.ok) {
                     const questionsData = await questionsResponse.json();
-                    if (questionsData.questions && questionsData.questions.length > 0) {
+                    if (questionsData.questions) {
                         allQuestions = questionsData.questions.map(q => ({
                             ...q,
                             repetitionCount: calculateRepetitionCount(q, questionsData.questions),
                             isRepeated: calculateIsRepeated(q, questionsData.questions)
                         }));
-                        console.log(`✅ Loaded ${allQuestions.length} questions from direct endpoint`);
+                        console.log(`Loaded ${allQuestions.length} questions from direct endpoint`);
                     }
+                } else if (questionsResponse.status === 404) {
+                    console.log('Questions endpoint not found, showing empty state');
+                    setError('Questions API endpoint not available. Please check backend implementation.');
+                    return;
                 }
             } catch (err) {
-                console.log('Direct questions endpoint failed, trying subject-by-subject...');
-            }
-
-            // If direct endpoint failed or returned no questions, try subject-by-subject
-            if (allQuestions.length === 0 && subjectNames.length > 0) {
-                for (const subject of subjectNames) {
-                    try {
-                        const questionsResponse = await fetch(`http://localhost:8088/api/v1/questions?subject=${encodeURIComponent(subject)}`);
-                        if (questionsResponse.ok) {
-                            const questionsData = await questionsResponse.json();
-                            if (questionsData.questions) {
-                                const subjectQuestions = questionsData.questions.map(q => ({
-                                    ...q,
-                                    subject: subject,
-                                    repetitionCount: calculateRepetitionCount(q, questionsData.questions),
-                                    isRepeated: calculateIsRepeated(q, questionsData.questions)
-                                }));
-                                allQuestions.push(...subjectQuestions);
-                            }
-                        }
-                    } catch (err) {
-                        console.error(`Error fetching questions for ${subject}:`, err);
-                    }
-                }
-                console.log(`✅ Loaded ${allQuestions.length} questions from subject endpoints`);
+                console.log('Questions endpoint failed:', err);
+                setError('Cannot connect to questions API. Please make sure the backend is running.');
+                return;
             }
 
             setQuestions(allQuestions);
@@ -158,8 +165,11 @@ const QuestionBank = () => {
             }
 
         } catch (err) {
-            console.error('Error in fetchAllQuestions:', err);
-            throw err;
+            console.error('Error fetching data:', err);
+            setError(`Failed to load data: ${err.message}`);
+        } finally {
+            setLoading(false);
+            setRefreshing(false);
         }
     };
 
