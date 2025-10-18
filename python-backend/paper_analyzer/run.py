@@ -34,10 +34,11 @@ def ensure_packages(package_map):
             __import__(import_name)
             print(f"{import_name} is already installed.")
         except ImportError:
-            
+
             print(f" Installing missing package: {pip_name} ...")
             subprocess.check_call([sys.executable, "-m", "pip", "install", pip_name])
             print(f" Successfully installed {pip_name}.")
+
 
 def install_ctransformers(cuda_enabled: bool):
     package_name = "ctransformers[cuda]" if cuda_enabled else "ctransformers"
@@ -63,9 +64,21 @@ def install_ctransformers(cuda_enabled: bool):
         subprocess.check_call([sys.executable, "-m", "pip", "install", "--upgrade", package_name])
         print(f" Successfully installed {package_name}.")
 
+def install_genai():
+    try:
+        import google.genai
+        print("Google genai is is already installed.")
+    except ImportError:
+        print("Installing google genai")
+        subprocess.check_call([sys.executable,"-m","pip","install","-q","-U","google-genai"])
+        print("Successfully installed google genai")
+
+
+
 # # Start server
 if __name__ == "__main__":
     ensure_packages(PACKAGE_MAP)
+    install_genai()
     install_ctransformers(cuda_enabled=not config.USE_CPU_FOR_AI)
     print("\n Starting FastAPI server...\n")
     import uvicorn
