@@ -9,6 +9,7 @@ import TeacherMockTest from './pages/TeacherMockTest';
 import TeacherQuestionBank from './pages/TeacherQuestionBank';
 import TeacherUploadQuestions from './pages/TeacherUploadQuestions';
 import TeacherManageClasses from './pages/TeacherManageClasses';
+import QuestionBank from "./pages/QuestionBank.jsx";
 
 function App() {
     return (
@@ -21,9 +22,10 @@ function App() {
                 <Route path="/upload-papers" element={<UploadPapers />} />
                 <Route path="/generate-test" element={<MockTest />} />
                 <Route path="/create-exam" element={<TeacherMockTest />} />
-                <Route path="/question-bank" element={<TeacherQuestionBank />} />
+                <Route path="/teacher/question-bank" element={<TeacherQuestionBank />} />
                 <Route path="upload-questions" element={<TeacherUploadQuestions />} />
                 <Route path="manage-classes" element={<TeacherManageClasses />} />
+                <Route path="/question-bank" element={<QuestionBank/>} />
             </Routes>
         </BrowserRouter>
     );
