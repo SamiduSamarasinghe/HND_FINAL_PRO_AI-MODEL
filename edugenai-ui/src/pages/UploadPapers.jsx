@@ -61,6 +61,9 @@ const UploadPapers = () => {
             const formData = new FormData();
             formData.append('file', file);
 
+            // Call similarity analysis first but don't set state yet
+            const similarityPromise = callSimilarityAnalysis(file, subject);
+
             // First API call
             const url = `http://localhost:8088/api/v1/pdf-reader?isPaper=true&subject=${encodeURIComponent(subject)}`;
             const response = await fetch(url, {
@@ -83,8 +86,9 @@ const UploadPapers = () => {
             setAnalysisResult(result);
             console.log('Upload result:', result);
 
-            // Second API call after first one completes
-            await callSimilarityAnalysis(file, subject);
+            // Now that first call is complete, wait for similarity analysis and set the result
+            const similarityData = await similarityPromise;
+            setSimilarityResult(similarityData);
 
         } catch (err) {
             setError(err.message);
@@ -117,12 +121,13 @@ const UploadPapers = () => {
             }
 
             const similarityData = await response.json();
-            setSimilarityResult(similarityData);
             console.log('Similarity result:', similarityData);
+            return similarityData;
 
         } catch (err) {
             console.error('Similarity analysis error:', err);
-            // Don't set error state here to avoid overriding successful first call
+            // Return null or empty object instead of throwing to avoid breaking the main flow
+            return null;
         }
     };
 
@@ -278,7 +283,7 @@ const UploadPapers = () => {
                             </Typography>
                         </Box>
 
-                        {/* Similarity Analysis Results */}
+                        {/* Similarity Analysis Results - Only show after main analysis is complete */}
                         {similarityResult && (
                             <>
                                 <Divider sx={{ my: 2 }} />
