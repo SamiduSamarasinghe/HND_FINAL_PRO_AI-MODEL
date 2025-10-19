@@ -112,9 +112,9 @@ const TeacherDashboard = () => {
                     {[
                         {/* text: 'Dashboard', icon: <MenuIcon /> },
                         { text: 'My Classes', icon: <ClassIcon /> */},
-                        { text: 'Question Bank', icon: <QuestionsIcon />, path: '/question-bank' },
-                        { text: 'Create Paper', icon: <CreateIcon />, path: '/create-exam' },
-                        { text: 'Upload Papers', icon: <UploadIcon />, path: '/upload-papers' },
+                        { text: 'Question Bank', icon: <QuestionsIcon />, path: '/teacher/question-bank' },
+                        { text: 'Create Paper', icon: <CreateIcon />, path: '/teacher/create-exam' },
+                        { text: 'Upload Papers', icon: <UploadIcon />, path: '/teacher/upload-papers' },
                         { text: 'Analytics', icon: <AnalyticsIcon /> },
                         { text: 'AI Assistant', icon: <AssistantIcon /> },
                         { /*text: 'Student Progress', icon: <ManageClassesIcon /> */},

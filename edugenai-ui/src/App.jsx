@@ -10,6 +10,7 @@ import TeacherQuestionBank from './pages/TeacherQuestionBank';
 import TeacherUploadQuestions from './pages/TeacherUploadQuestions';
 import TeacherManageClasses from './pages/TeacherManageClasses';
 import QuestionBank from "./pages/QuestionBank.jsx";
+import UploadPapersComponent from "./pages/UploadPapersComponent.jsx"
 
 function App() {
     return (
@@ -17,15 +18,20 @@ function App() {
             <Routes>
                 <Route path="/" element={<Login />} />
                 <Route path="/select-role" element={<RoleSelection />} />
+
                 <Route path="/student" element={<StudentDashboard />} />
-                <Route path="/teacher" element={<TeacherDashboard />} />
                 <Route path="/upload-papers" element={<UploadPapers />} />
+                <Route path="/question-bank" element={<QuestionBank/>} />
                 <Route path="/generate-test" element={<MockTest />} />
-                <Route path="/create-exam" element={<TeacherMockTest />} />
+
+
+                <Route path="/teacher" element={<TeacherDashboard />} />
+                <Route path="/teacher/create-exam" element={<TeacherMockTest />} />
                 <Route path="/teacher/question-bank" element={<TeacherQuestionBank />} />
                 <Route path="upload-questions" element={<TeacherUploadQuestions />} />
                 <Route path="manage-classes" element={<TeacherManageClasses />} />
-                <Route path="/question-bank" element={<QuestionBank/>} />
+                <Route path="/upload-papers" element={<UploadPapersComponent />} />
+
             </Routes>
         </BrowserRouter>
     );
