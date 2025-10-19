@@ -1,5 +1,6 @@
 from app.config.firebase_connection import FirebaseConnector
 from firebase_admin import firestore
+import datetime
 
 connector = FirebaseConnector()
 __db = connector.get_connection()
@@ -132,3 +133,38 @@ def get_all_questions_and_sources():
     except Exception as error:
         print(f"Error fetching questions: {error}")
         return []
+
+def save_mock_test_feed_back(data: dict, user: str):
+    """
+    Save mock test feedback to Firebase Firestore
+
+    Args:
+        data (dict): The feedback data from Gemini
+        user (str): The user ID to associate with this feedback
+    """
+    try:
+
+        # Add user ID and timestamp to the data
+        enhanced_data = {
+            **data,  # Spread the original data
+            "user_id": user,
+            "timestamp": datetime.datetime.now(),
+            "created_at": firestore.SERVER_TIMESTAMP
+        }
+
+        # Reference to the mock_test_feedback collection
+        collection_ref = __db.collection('mock_test_feedback')
+
+        # Add the document to Firestore
+        doc_ref = collection_ref.add(enhanced_data)
+
+        print(f"Successfully saved mock test feedback for user {user}")
+        print(f"Document ID: {doc_ref[1].id}")
+
+        return "Feedback saved successfully"
+
+
+    except Exception as e:
+        print(f"Error saving mock test feedback: {e}")
+        return "Failed to save feedback"
+
