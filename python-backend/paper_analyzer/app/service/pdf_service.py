@@ -1,5 +1,5 @@
 from fastapi import UploadFile
-import fitz
+import fitz,re
 from io import BytesIO
 from app.model.firebase_db_model import save_structured_questions
 from app.service.pdf_question_preparer import get_clean_questions
@@ -176,3 +176,68 @@ async def read_pdf_file(file:UploadFile):
         print(f" Found {len(cleaned_questions)} cleaned questions")
 
     return cleaned_questions
+
+async def read_mock_test_papers(file:UploadFile):
+    if file is not None:
+
+        contents = await file.read()
+        pdf_stream = BytesIO(contents)
+        doc = fitz.open(stream=pdf_stream,filetype="pdf")
+
+        all_pages = []
+        for page_index, page in enumerate(doc):
+            text = page.get_text()
+            all_pages.append(text)
+            print(f" Page {page_index + 1}: {len(text)} characters")
+
+        full_text = "\n--- Page Break ---\n".join(all_pages)
+        print(f"Total text extracted: {len(full_text)} characters")
+        print(full_text)
+        print("\n\nCleaned-Q&A Block\n")
+        q_and_a_block = clean_mock_test_paper(full_text)
+
+        print(q_and_a_block)
+        return q_and_a_block
+
+
+def clean_mock_test_paper(contents):
+
+    cleaned_pages = contents.split("\n--- Page Break ---\n")
+    questions_and_answers = []
+    paper_subject = None
+
+    # patterns
+    subject_pattern = re.compile(
+        r"Subject:\s*([^|]+)"
+    )
+
+    question_answer_pattern = re.compile(
+        r"(Question\s*\d+\s*:.*?Points\s*:\s*\d+(?:.*?Your Answer:.*?(?=Question\s*\d+:|$)))",
+        re.DOTALL
+    )
+
+    page_break_pattern = re.compile(
+        r'-{2,}\s*Page\s*Break\s*-{2,}|^\s*\d+\s*\|\s*P\s*a\s*g\s*e\s*$',
+        re.IGNORECASE | re.MULTILINE
+    )
+
+    # Loop through each page
+    for i, page in enumerate(cleaned_pages):
+        page = page_break_pattern.sub('', page).strip()
+
+        # Extract subject only once (from the first page)
+        if paper_subject is None:
+            subject_match = subject_pattern.search(page)
+            if subject_match:
+                paper_subject = subject_match.group(1).strip()
+
+
+        matches = question_answer_pattern.findall(page)
+        for match in matches:
+            questions_and_answers.append(match.strip())
+
+    return {
+        "subject": paper_subject,
+        "questions": questions_and_answers
+    }
+
