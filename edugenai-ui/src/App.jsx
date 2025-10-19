@@ -10,7 +10,7 @@ import TeacherQuestionBank from './pages/TeacherQuestionBank';
 import TeacherUploadQuestions from './pages/TeacherUploadQuestions';
 import TeacherManageClasses from './pages/TeacherManageClasses';
 import QuestionBank from "./pages/QuestionBank.jsx";
-import UploadPapersComponent from "./pages/UploadPapersComponent.jsx"
+/*import UploadPapersComponent from "./pages/UploadPapersComponent.jsx"*/
 
 function App() {
     return (
@@ -30,7 +30,7 @@ function App() {
                 <Route path="/teacher/question-bank" element={<TeacherQuestionBank />} />
                 <Route path="upload-questions" element={<TeacherUploadQuestions />} />
                 <Route path="manage-classes" element={<TeacherManageClasses />} />
-                <Route path="/upload-papers" element={<UploadPapersComponent />} />
+                {/*<Route path="/upload-papers" element={<UploadPapersComponent />} />*/}
 
             </Routes>
         </BrowserRouter>
