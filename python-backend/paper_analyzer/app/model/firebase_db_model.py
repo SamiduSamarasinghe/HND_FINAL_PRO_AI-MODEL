@@ -1,3 +1,5 @@
+from google.cloud.firestore_v1 import FieldFilter
+
 from app.config.firebase_connection import FirebaseConnector
 from firebase_admin import firestore
 import datetime
@@ -167,4 +169,68 @@ def save_mock_test_feed_back(data: dict, user: str):
     except Exception as e:
         print(f"Error saving mock test feedback: {e}")
         return "Failed to save feedback"
+
+def get_all_feedback_for_userid(userid):
+    try:
+        qurry = (__db.collection("mock_test_feedback")
+                 .where(filter=FieldFilter("user_id","==",userid))
+                 .stream())
+
+        feed_back_list =[]
+
+        for doc in qurry:
+            data = doc.to_dict()
+            data["id"] =doc.id
+            feed_back_list.append(data)
+
+        print(feed_back_list)
+        return feed_back_list
+
+    except Exception as error:
+        print(f"Error{error}")
+        return f"Error getting feedback {error}"
+
+def get_all_feedback_by_subject(userid,subject):
+
+    try:
+        qurry = (__db.collection("mock_test_feedback")
+                  .where(filter=FieldFilter("user_id","==",userid))
+                 .where(filter=FieldFilter("subject", "==",subject))
+                 .stream())
+
+        feed_back_list =[]
+
+        for doc in qurry:
+            data = doc.to_dict()
+            data["id"] =doc.id
+            feed_back_list.append(data)
+
+        print(feed_back_list)
+        return feed_back_list
+
+    except Exception as error:
+        print(f"Error{error}")
+        return f"Error getting feedback {error}"
+
+def get_all_subjects_on_feedbacks(userid):
+    try:
+        qurry = (__db.collection("mock_test_feedback")
+                 .where("user_id", "==", userid)
+                 .select(["subject"])
+                 .stream())
+
+        subject_set = set()
+
+        for doc in qurry:
+            data = doc.to_dict()
+            print("Document data:", data)  # debug
+            subject_set.add(data.get("subject"))
+
+        subject_list = list(subject_set)
+        print(subject_list)
+        return subject_list
+
+    except Exception as error:
+        print(f"Error{error}")
+        return f"Error getting feedback {error}"
 

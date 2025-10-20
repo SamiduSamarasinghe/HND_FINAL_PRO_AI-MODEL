@@ -11,6 +11,7 @@ import TeacherUploadQuestions from './pages/TeacherUploadQuestions';
 import TeacherManageClasses from './pages/TeacherManageClasses';
 import QuestionBank from "./pages/QuestionBank.jsx";
 import TeacherUploadPapers from "./pages/TeacherUploadPapers.jsx"
+import AnalyticsPage from './pages/analytics.jsx';
 
 function App() {
     return (
@@ -23,6 +24,7 @@ function App() {
                 <Route path="/upload-papers" element={<UploadPapers />} />
                 <Route path="/question-bank" element={<QuestionBank/>} />
                 <Route path="/generate-test" element={<MockTest />} />
+                <Route path="/analytics" element={<AnalyticsPage/>}/>
 
 
                 <Route path="/teacher" element={<TeacherDashboard />} />
