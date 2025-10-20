@@ -33,7 +33,8 @@ import {
     School as SchoolIcon,
     Refresh as RefreshIcon,
     ContentCopy as RepeatedIcon,
-    Share as ShareIcon
+    Download as DownloadIcon,
+    PictureAsPdf as PdfIcon
 } from '@mui/icons-material';
 import backgroundImage from '../assets/pngtree-home-based-e-learning-and-online-education-in-a-3d-illustration-picture-image_7253729.jpg';
 
@@ -49,21 +50,12 @@ const TeacherQuestionBank = () => {
     const [filteredQuestions, setFilteredQuestions] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+    const [success, setSuccess] = useState('');
     const [refreshing, setRefreshing] = useState(false);
     const [subjects, setSubjects] = useState([]);
-    const [shareDialogOpen, setShareDialogOpen] = useState(false);
-    const [selectedClass, setSelectedClass] = useState('');
-    const [assignmentTitle, setAssignmentTitle] = useState('');
+    const [exportDialogOpen, setExportDialogOpen] = useState(false);
 
-    // Mock teacher classes - replace with real data from API
-    const teacherClasses = [
-        { id: 'math101', name: 'Mathematics 101', students: 32 },
-        { id: 'physics201', name: 'Physics 201', students: 28 },
-        { id: 'advCalc', name: 'Advanced Calculus', students: 24 },
-        { id: 'stats', name: 'Statistics', students: 35 }
-    ];
-
-    // Fetch all data - using the same pattern as student QuestionBank
+    // Fetch all data
     const fetchData = async () => {
         try {
             setLoading(true);
@@ -243,49 +235,53 @@ const TeacherQuestionBank = () => {
         setSearchTerm("");
     };
 
-    const handleShareToClass = async () => {
-        if (!selectedClass || !assignmentTitle) {
-            setError('Please select a class and enter assignment title');
+    const clearSelection = () => {
+        setSelectedQuestions([]);
+    };
+
+    // Export selected questions as PDF
+    const exportQuestionsAsPDF = () => {
+        if (selectedQuestions.length === 0) {
+            setError('Please select questions to export');
             return;
         }
 
-        try {
-            const selectedQuestionsData = questions.filter(q => selectedQuestions.includes(q.id));
+        const selectedQuestionsData = questions.filter(q => selectedQuestions.includes(q.id));
 
-            // Create assignment
-            const assignmentData = {
-                classId: selectedClass,
-                title: assignmentTitle,
-                content: JSON.stringify(selectedQuestionsData),
-                type: 'question_bank',
-                dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
-            };
+        // Create PDF content
+        const pdfContent = `
+QUESTIONS EXPORT
+Generated on: ${new Date().toLocaleDateString()}
+Total Questions: ${selectedQuestions.length}
 
-            const response = await fetch('http://localhost:8088/api/v1/teacher/assignments', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(assignmentData)
-            });
+${selectedQuestionsData.map((q, index) => `
+QUESTION ${index + 1}:
+${q.text}
 
-            if (!response.ok) {
-                throw new Error('Failed to create assignment');
-            }
+Type: ${q.type}
+Subject: ${q.subject}
+Points: ${q.points}
+Difficulty: ${q.difficulty}
+${q.type === 'MCQ' && q.options ? `Options:\n${q.options.map((opt, i) => `  ${String.fromCharCode(65 + i)}) ${opt}`).join('\n')}` : ''}
 
-            const result = await response.json();
-            console.log('Assignment created:', result);
+${'='.repeat(50)}
+`).join('\n')}
+        `;
 
-            setShareDialogOpen(false);
-            setSelectedClass('');
-            setAssignmentTitle('');
-            setSelectedQuestions([]);
+        // Create and download file
+        const blob = new Blob([pdfContent], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `questions_export_${new Date().getTime()}.txt`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
 
-            alert('Assignment created successfully!');
-
-        } catch (err) {
-            setError(`Failed to create assignment: ${err.message}`);
-        }
+        setExportDialogOpen(false);
+        setSelectedQuestions([]);
+        setSuccess(`Successfully exported ${selectedQuestions.length} questions!`);
     };
 
     const getQuestionTypeColor = (type) => {
@@ -349,18 +345,25 @@ const TeacherQuestionBank = () => {
                     {selectedQuestions.length > 0 && (
                         <Button
                             variant="contained"
-                            startIcon={<ShareIcon />}
-                            onClick={() => setShareDialogOpen(true)}
+                            startIcon={<PdfIcon />}
+                            onClick={() => setExportDialogOpen(true)}
                         >
-                            Share to Class ({selectedQuestions.length})
+                            Export PDF ({selectedQuestions.length})
                         </Button>
                     )}
                 </Box>
             </Box>
 
+            {/* Success Alert */}
+            {success && (
+                <Alert severity="success" sx={{ mb: 3 }} onClose={() => setSuccess('')}>
+                    {success}
+                </Alert>
+            )}
+
             {/* Error Alert */}
             {error && (
-                <Alert severity="error" sx={{ mb: 3 }}>
+                <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError('')}>
                     {error}
                 </Alert>
             )}
@@ -434,6 +437,21 @@ const TeacherQuestionBank = () => {
                     </Grid>
                 </Grid>
             </Paper>
+
+            {/* Selection Summary */}
+            {selectedQuestions.length > 0 && (
+                <Alert
+                    severity="info"
+                    sx={{ mb: 2 }}
+                    action={
+                        <Button color="inherit" size="small" onClick={clearSelection}>
+                            Clear Selection
+                        </Button>
+                    }
+                >
+                    {selectedQuestions.length} questions selected for export
+                </Alert>
+            )}
 
             {/* Results Summary */}
             <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -555,45 +573,25 @@ const TeacherQuestionBank = () => {
                 </Box>
             )}
 
-            {/* Share to Class Dialog */}
-            <Dialog open={shareDialogOpen} onClose={() => setShareDialogOpen(false)} maxWidth="sm" fullWidth>
-                <DialogTitle>Share Questions to Class</DialogTitle>
+            {/* Export Dialog */}
+            <Dialog open={exportDialogOpen} onClose={() => setExportDialogOpen(false)} maxWidth="sm" fullWidth>
+                <DialogTitle>Export Questions</DialogTitle>
                 <DialogContent>
-                    <FormControl fullWidth sx={{ mt: 2 }}>
-                        <InputLabel>Select Class</InputLabel>
-                        <Select
-                            value={selectedClass}
-                            label="Select Class"
-                            onChange={(e) => setSelectedClass(e.target.value)}
-                        >
-                            <MenuItem value="" disabled>Select a class</MenuItem>
-                            {teacherClasses.map((cls) => (
-                                <MenuItem key={cls.id} value={cls.id}>
-                                    {cls.name}
-                                </MenuItem>
-                            ))}
-                        </Select>
-                    </FormControl>
-                    <TextField
-                        fullWidth
-                        label="Assignment Title"
-                        value={assignmentTitle}
-                        onChange={(e) => setAssignmentTitle(e.target.value)}
-                        sx={{ mt: 2 }}
-                        placeholder="e.g., Mathematics Quiz Week 1"
-                    />
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-                        {selectedQuestions.length} questions will be shared as an assignment.
+                    <Typography variant="body1" sx={{ mb: 2 }}>
+                        You are about to export {selectedQuestions.length} questions as a PDF file.
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                        The exported file will contain all selected questions with their details.
                     </Typography>
                 </DialogContent>
                 <DialogActions>
-                    <Button onClick={() => setShareDialogOpen(false)}>Cancel</Button>
+                    <Button onClick={() => setExportDialogOpen(false)}>Cancel</Button>
                     <Button
                         variant="contained"
-                        onClick={handleShareToClass}
-                        disabled={!selectedClass || !assignmentTitle}
+                        onClick={exportQuestionsAsPDF}
+                        startIcon={<PdfIcon />}
                     >
-                        Create Assignment
+                        Export as PDF
                     </Button>
                 </DialogActions>
             </Dialog>
