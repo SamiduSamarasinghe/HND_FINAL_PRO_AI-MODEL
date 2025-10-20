@@ -11,9 +11,6 @@ import {
     Paper,
     Tabs,
     Tab,
-    List,
-    ListItem,
-    ListItemText,
     Chip,
     Avatar,
     IconButton,
@@ -27,32 +24,39 @@ import {
     FormControl,
     InputLabel,
     Alert,
-    CircularProgress
+    CircularProgress,
+    RadioGroup,
+    FormControlLabel,
+    Radio,
+    FormLabel
 } from '@mui/material';
 import {
     Groups as ClassIcon,
     Assignment as ExamIcon,
-    BarChart as AnalyticsIcon,
     Add as AddIcon,
-    Edit as EditIcon,
     Delete as DeleteIcon,
     PersonAdd as AddStudentIcon,
     Search as SearchIcon,
     Person as PersonIcon,
-    Share as ShareIcon,
-    Assignment as AssignmentIcon
+    Description as DescriptionIcon,
+    LibraryBooks as QuestionBankIcon,
+    PictureAsPdf as PdfIcon,
+    Close as CloseIcon
 } from '@mui/icons-material';
 
 const TeacherManageClasses = () => {
     const [activeTab, setActiveTab] = useState('classes');
     const [openDialog, setOpenDialog] = useState(false);
     const [openStudentDialog, setOpenStudentDialog] = useState(false);
+    const [openAssignmentDialog, setOpenAssignmentDialog] = useState(false);
+    const [openQuestionBankModal, setOpenQuestionBankModal] = useState(false);
     const [selectedClass, setSelectedClass] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
     const [classes, setClasses] = useState([]);
+    const [assignments, setAssignments] = useState([]);
     const [newClass, setNewClass] = useState({
         name: '',
         subject: '',
@@ -63,6 +67,15 @@ const TeacherManageClasses = () => {
         name: '',
         email: ''
     });
+    const [newAssignment, setNewAssignment] = useState({
+        title: '',
+        type: 'text',
+        content: '',
+        dueDate: '',
+        questions: [],
+        pdfFile: null
+    });
+    const [assignmentType, setAssignmentType] = useState('text');
 
     // Fetch classes from backend
     const fetchClasses = async () => {
@@ -112,7 +125,7 @@ const TeacherManageClasses = () => {
             setSuccess(`Class "${newClass.name}" created successfully!`);
             setOpenDialog(false);
             setNewClass({ name: '', subject: '', gradeLevel: '10', description: '' });
-            fetchClasses(); // Refresh the list
+            fetchClasses();
         } catch (err) {
             setError(err.message);
         } finally {
@@ -144,7 +157,55 @@ const TeacherManageClasses = () => {
             setSuccess(`Student "${newStudent.name}" added successfully!`);
             setOpenStudentDialog(false);
             setNewStudent({ name: '', email: '' });
-            fetchClasses(); // Refresh the list
+            fetchClasses();
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleCreateAssignment = async () => {
+        if (!selectedClass) return;
+
+        try {
+            setLoading(true);
+            setError('');
+
+            const assignmentData = {
+                classId: selectedClass.id,
+                title: newAssignment.title,
+                type: assignmentType,
+                content: newAssignment.content,
+                dueDate: newAssignment.dueDate,
+                questions: newAssignment.questions
+            };
+
+            const response = await fetch('http://localhost:8088/api/v1/teacher/assignments', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(assignmentData)
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || 'Failed to create assignment');
+            }
+
+            const result = await response.json();
+            setSuccess(`Assignment "${newAssignment.title}" created successfully!`);
+            setOpenAssignmentDialog(false);
+            setNewAssignment({
+                title: '',
+                type: 'text',
+                content: '',
+                dueDate: '',
+                questions: [],
+                pdfFile: null
+            });
+            setAssignmentType('text');
         } catch (err) {
             setError(err.message);
         } finally {
@@ -164,7 +225,7 @@ const TeacherManageClasses = () => {
             }
 
             setSuccess('Student removed successfully!');
-            fetchClasses(); // Refresh the list
+            fetchClasses();
         } catch (err) {
             setError(err.message);
         } finally {
@@ -175,6 +236,42 @@ const TeacherManageClasses = () => {
     const openAddStudentDialog = (classItem) => {
         setSelectedClass(classItem);
         setOpenStudentDialog(true);
+    };
+
+    const openCreateAssignmentDialog = (classItem) => {
+        setSelectedClass(classItem);
+        setOpenAssignmentDialog(true);
+    };
+
+    const handleAssignmentTypeChange = (type) => {
+        setAssignmentType(type);
+        setNewAssignment({
+            ...newAssignment,
+            type: type,
+            content: '',
+            questions: []
+        });
+    };
+
+    // Handle questions selected from Question Bank modal
+    const handleQuestionsSelected = (selectedQuestions) => {
+        setNewAssignment(prev => ({
+            ...prev,
+            questions: selectedQuestions
+        }));
+        setOpenQuestionBankModal(false);
+        setSuccess(`${selectedQuestions.length} questions added to assignment!`);
+    };
+
+    const removeQuestionFromAssignment = (questionId) => {
+        setNewAssignment(prev => ({
+            ...prev,
+            questions: prev.questions.filter(q => q.id !== questionId)
+        }));
+    };
+
+    const openQuestionBankSelection = () => {
+        setOpenQuestionBankModal(true);
     };
 
     const filteredClasses = classes.filter(cls =>
@@ -234,7 +331,7 @@ const TeacherManageClasses = () => {
                 </Tabs>
             </Paper>
 
-            {/* Tab Content */}
+            {/* Tab Content - Classes */}
             {activeTab === 'classes' && (
                 <Grid container spacing={3}>
                     {loading ? (
@@ -284,6 +381,7 @@ const TeacherManageClasses = () => {
                                                 variant="outlined"
                                                 size="small"
                                                 startIcon={<ExamIcon />}
+                                                onClick={() => openCreateAssignmentDialog(cls)}
                                             >
                                                 Create Assignment
                                             </Button>
@@ -296,6 +394,7 @@ const TeacherManageClasses = () => {
                 </Grid>
             )}
 
+            {/* Tab Content - Students */}
             {activeTab === 'students' && (
                 <Card variant="outlined">
                     <CardContent>
@@ -342,30 +441,6 @@ const TeacherManageClasses = () => {
                                         No students in this class yet.
                                     </Typography>
                                 )}
-                            </Paper>
-                        ))}
-                    </CardContent>
-                </Card>
-            )}
-
-            {activeTab === 'assignments' && (
-                <Card variant="outlined">
-                    <CardContent>
-                        <Typography variant="h6" gutterBottom>
-                            Class Assignments
-                        </Typography>
-                        {classes.map((cls) => (
-                            <Paper key={cls.id} sx={{ p: 2, mb: 2 }}>
-                                <Typography variant="subtitle1" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
-                                    <AssignmentIcon sx={{ mr: 1, fontSize: 20 }} />
-                                    {cls.name} Assignments
-                                </Typography>
-                                <Button variant="outlined" startIcon={<AddIcon />} sx={{ mb: 2 }}>
-                                    Create New Assignment
-                                </Button>
-                                <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 2 }}>
-                                    No assignments created yet.
-                                </Typography>
                             </Paper>
                         ))}
                     </CardContent>
@@ -462,6 +537,373 @@ const TeacherManageClasses = () => {
                     </Button>
                 </DialogActions>
             </Dialog>
+
+            {/* Create Assignment Dialog */}
+            <Dialog open={openAssignmentDialog} onClose={() => setOpenAssignmentDialog(false)} maxWidth="md" fullWidth>
+                <DialogTitle>
+                    Create Assignment for {selectedClass?.name}
+                </DialogTitle>
+                <DialogContent>
+                    <Stack spacing={3} sx={{ mt: 1 }}>
+                        <TextField
+                            label="Assignment Title *"
+                            fullWidth
+                            value={newAssignment.title}
+                            onChange={(e) => setNewAssignment({ ...newAssignment, title: e.target.value })}
+                            placeholder="e.g., Week 1 Quiz, Final Exam, Homework Assignment"
+                        />
+
+                        <FormControl component="fieldset">
+                            <FormLabel component="legend">Assignment Type</FormLabel>
+                            <RadioGroup
+                                value={assignmentType}
+                                onChange={(e) => handleAssignmentTypeChange(e.target.value)}
+                                row
+                            >
+                                <FormControlLabel
+                                    value="text"
+                                    control={<Radio />}
+                                    label={
+                                        <Stack direction="row" alignItems="center" spacing={1}>
+                                            <DescriptionIcon />
+                                            <Typography>Text Assignment</Typography>
+                                        </Stack>
+                                    }
+                                />
+                                <FormControlLabel
+                                    value="question_bank"
+                                    control={<Radio />}
+                                    label={
+                                        <Stack direction="row" alignItems="center" spacing={1}>
+                                            <QuestionBankIcon />
+                                            <Typography>Question Bank</Typography>
+                                        </Stack>
+                                    }
+                                />
+                                <FormControlLabel
+                                    value="pdf"
+                                    control={<Radio />}
+                                    label={
+                                        <Stack direction="row" alignItems="center" spacing={1}>
+                                            <PdfIcon />
+                                            <Typography>PDF Document</Typography>
+                                        </Stack>
+                                    }
+                                />
+                            </RadioGroup>
+                        </FormControl>
+
+                        {assignmentType === 'text' && (
+                            <TextField
+                                label="Assignment Content *"
+                                fullWidth
+                                multiline
+                                rows={6}
+                                value={newAssignment.content}
+                                onChange={(e) => setNewAssignment({ ...newAssignment, content: e.target.value })}
+                                placeholder="Enter the assignment instructions, questions, or content..."
+                            />
+                        )}
+
+                        {assignmentType === 'question_bank' && (
+                            <Box>
+                                <Button
+                                    variant="outlined"
+                                    startIcon={<QuestionBankIcon />}
+                                    onClick={openQuestionBankSelection}
+                                    sx={{ mb: 2 }}
+                                >
+                                    Select Questions from Question Bank
+                                </Button>
+
+                                {newAssignment.questions.length > 0 && (
+                                    <Box>
+                                        <Typography variant="subtitle2" gutterBottom>
+                                            Selected Questions ({newAssignment.questions.length}):
+                                        </Typography>
+                                        <Stack spacing={1}>
+                                            {newAssignment.questions.map((question, index) => (
+                                                <Paper key={question.id} variant="outlined" sx={{ p: 1.5 }}>
+                                                    <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
+                                                        <Box sx={{ flex: 1 }}>
+                                                            <Typography variant="body2" gutterBottom>
+                                                                {index + 1}. {question.text}
+                                                            </Typography>
+                                                            <Stack direction="row" spacing={1}>
+                                                                <Chip label={question.type} size="small" />
+                                                                <Chip label={`${question.points} pts`} size="small" variant="outlined" />
+                                                            </Stack>
+                                                        </Box>
+                                                        <IconButton
+                                                            size="small"
+                                                            color="error"
+                                                            onClick={() => removeQuestionFromAssignment(question.id)}
+                                                        >
+                                                            <CloseIcon />
+                                                        </IconButton>
+                                                    </Stack>
+                                                </Paper>
+                                            ))}
+                                        </Stack>
+                                    </Box>
+                                )}
+                            </Box>
+                        )}
+
+                        {assignmentType === 'pdf' && (
+                            <Box>
+                                <Button
+                                    variant="outlined"
+                                    component="label"
+                                    startIcon={<PdfIcon />}
+                                >
+                                    Upload PDF File
+                                    <input
+                                        type="file"
+                                        hidden
+                                        accept=".pdf"
+                                        onChange={(e) => {
+                                            const file = e.target.files[0];
+                                            if (file) {
+                                                setNewAssignment({ ...newAssignment, pdfFile: file });
+                                            }
+                                        }}
+                                    />
+                                </Button>
+                                {newAssignment.pdfFile && (
+                                    <Typography variant="body2" sx={{ mt: 1 }}>
+                                        Selected: {newAssignment.pdfFile.name}
+                                    </Typography>
+                                )}
+                            </Box>
+                        )}
+
+                        <TextField
+                            label="Due Date *"
+                            type="datetime-local"
+                            fullWidth
+                            value={newAssignment.dueDate}
+                            onChange={(e) => setNewAssignment({ ...newAssignment, dueDate: e.target.value })}
+                            InputLabelProps={{ shrink: true }}
+                        />
+                    </Stack>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setOpenAssignmentDialog(false)}>Cancel</Button>
+                    <Button
+                        variant="contained"
+                        onClick={handleCreateAssignment}
+                        disabled={!newAssignment.title || !newAssignment.dueDate || loading}
+                    >
+                        {loading ? 'Creating...' : 'Create Assignment'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* Question Bank Modal */}
+            <Dialog
+                open={openQuestionBankModal}
+                onClose={() => setOpenQuestionBankModal(false)}
+                maxWidth="lg"
+                fullWidth
+                sx={{
+                    '& .MuiDialog-paper': {
+                        height: '90vh'
+                    }
+                }}
+            >
+                <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Typography variant="h6">Select Questions from Question Bank</Typography>
+                    <IconButton onClick={() => setOpenQuestionBankModal(false)}>
+                        <CloseIcon />
+                    </IconButton>
+                </DialogTitle>
+                <DialogContent>
+                    <QuestionBankSelection
+                        onQuestionsSelected={handleQuestionsSelected}
+                        onClose={() => setOpenQuestionBankModal(false)}
+                    />
+                </DialogContent>
+            </Dialog>
+        </Box>
+    );
+};
+
+// Question Bank Selection Component (renamed from QuestionBankModal)
+const QuestionBankSelection = ({ onQuestionsSelected, onClose }) => {
+    const [selectedQuestions, setSelectedQuestions] = useState([]);
+    const [questions, setQuestions] = useState([]);
+    const [filteredQuestions, setFilteredQuestions] = useState([]);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [filters, setFilters] = useState({
+        subject: '',
+        type: '',
+        difficulty: ''
+    });
+    const [loading, setLoading] = useState(true);
+
+    // Fetch questions
+    const fetchQuestions = async () => {
+        try {
+            setLoading(true);
+            const response = await fetch('http://localhost:8088/api/v1/questions');
+            if (response.ok) {
+                const data = await response.json();
+                const questionsArray = data.questions || [];
+                setQuestions(questionsArray);
+                setFilteredQuestions(questionsArray);
+            }
+        } catch (err) {
+            console.error('Error fetching questions:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchQuestions();
+    }, []);
+
+    useEffect(() => {
+        filterQuestions();
+    }, [searchTerm, filters, questions]);
+
+    const filterQuestions = () => {
+        let filtered = [...questions];
+
+        if (searchTerm) {
+            filtered = filtered.filter(q =>
+                q.text?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                q.subject?.toLowerCase().includes(searchTerm.toLowerCase())
+            );
+        }
+
+        if (filters.subject) {
+            filtered = filtered.filter(q => q.subject === filters.subject);
+        }
+
+        if (filters.type) {
+            filtered = filtered.filter(q => q.type === filters.type);
+        }
+
+        if (filters.difficulty) {
+            filtered = filtered.filter(q => q.difficulty === filters.difficulty);
+        }
+
+        setFilteredQuestions(filtered);
+    };
+
+    const toggleQuestionSelect = (question) => {
+        setSelectedQuestions(prev =>
+            prev.find(q => q.id === question.id)
+                ? prev.filter(q => q.id !== question.id)
+                : [...prev, question]
+        );
+    };
+
+    const handleAddToAssignment = () => {
+        onQuestionsSelected(selectedQuestions);
+    };
+
+    return (
+        <Box sx={{ p: 2 }}>
+            {/* Search and Filters */}
+            <Paper sx={{ p: 2, mb: 2 }}>
+                <Stack direction="row" spacing={2} alignItems="center">
+                    <TextField
+                        size="small"
+                        placeholder="Search questions..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        sx={{ flex: 1 }}
+                        InputProps={{
+                            startAdornment: <SearchIcon color="action" />
+                        }}
+                    />
+                    <FormControl size="small" sx={{ minWidth: 120 }}>
+                        <InputLabel>Type</InputLabel>
+                        <Select
+                            value={filters.type}
+                            label="Type"
+                            onChange={(e) => setFilters(prev => ({ ...prev, type: e.target.value }))}
+                        >
+                            <MenuItem value="">All</MenuItem>
+                            <MenuItem value="MCQ">MCQ</MenuItem>
+                            <MenuItem value="Short Answer">Short Answer</MenuItem>
+                            <MenuItem value="Essay">Essay</MenuItem>
+                        </Select>
+                    </FormControl>
+                </Stack>
+            </Paper>
+
+            {/* Selection Info */}
+            {selectedQuestions.length > 0 && (
+                <Alert severity="info" sx={{ mb: 2 }}>
+                    {selectedQuestions.length} questions selected
+                </Alert>
+            )}
+
+            {/* Questions List */}
+            <Box sx={{ maxHeight: '60vh', overflow: 'auto' }}>
+                {loading ? (
+                    <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                        <CircularProgress />
+                    </Box>
+                ) : filteredQuestions.length === 0 ? (
+                    <Typography textAlign="center" color="text.secondary" sx={{ p: 3 }}>
+                        No questions found
+                    </Typography>
+                ) : (
+                    <Stack spacing={1}>
+                        {filteredQuestions.map((question) => (
+                            <Paper
+                                key={question.id}
+                                variant="outlined"
+                                sx={{
+                                    p: 2,
+                                    borderColor: selectedQuestions.find(q => q.id === question.id) ? 'primary.main' : 'divider',
+                                    bgcolor: selectedQuestions.find(q => q.id === question.id) ? 'action.selected' : 'background.paper'
+                                }}
+                            >
+                                <Stack direction="row" spacing={2} alignItems="flex-start">
+                                    <input
+                                        type="checkbox"
+                                        checked={!!selectedQuestions.find(q => q.id === question.id)}
+                                        onChange={() => toggleQuestionSelect(question)}
+                                        style={{ marginTop: '4px' }}
+                                    />
+                                    <Box sx={{ flex: 1 }}>
+                                        <Typography variant="body1" gutterBottom>
+                                            {question.text}
+                                        </Typography>
+                                        <Stack direction="row" spacing={1} flexWrap="wrap" gap={0.5}>
+                                            <Chip label={question.type} size="small" />
+                                            <Chip label={question.subject} size="small" variant="outlined" />
+                                            {question.points && (
+                                                <Chip label={`${question.points} pts`} size="small" variant="outlined" />
+                                            )}
+                                        </Stack>
+                                    </Box>
+                                </Stack>
+                            </Paper>
+                        ))}
+                    </Stack>
+                )}
+            </Box>
+
+            {/* Action Buttons */}
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 2, pt: 2, borderTop: 1, borderColor: 'divider' }}>
+                <Button onClick={onClose}>
+                    Cancel
+                </Button>
+                <Button
+                    variant="contained"
+                    onClick={handleAddToAssignment}
+                    disabled={selectedQuestions.length === 0}
+                >
+                    Add {selectedQuestions.length} Questions to Assignment
+                </Button>
+            </Box>
         </Box>
     );
 };
