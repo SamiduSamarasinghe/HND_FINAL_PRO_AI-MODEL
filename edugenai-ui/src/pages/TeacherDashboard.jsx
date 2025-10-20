@@ -110,8 +110,7 @@ const TeacherDashboard = () => {
                 <Divider />
                 <List>
                     {[
-                        {/* text: 'Dashboard', icon: <MenuIcon /> },
-                        { text: 'My Classes', icon: <ClassIcon /> */},
+                        {/* text: 'Dashboard', icon: <MenuIcon /> */},
                         { text: 'Question Bank', icon: <QuestionsIcon />, path: '/teacher/question-bank' },
                         { text: 'Create Paper', icon: <CreateIcon />, path: '/teacher/create-exam' },
                         { text: 'Upload Papers', icon: <UploadIcon />, path: '/teacher/upload-papers' },
@@ -363,11 +362,6 @@ const TeacherDashboard = () => {
                                 <Stack spacing={2}>
                                     {[
                                         {
-                                            icon: <CreateIcon />,
-                                            text: "Create New Paper",
-                                            action: () => navigate('/create-exam')
-                                        },
-                                        {
                                             icon: <UploadIcon />,
                                             text: "Upload Questions",
                                             action: () => navigate('/upload-questions')
@@ -376,11 +370,6 @@ const TeacherDashboard = () => {
                                             icon: <ManageClassesIcon />,
                                             text: "Manage Classes",
                                             action: () => navigate('/manage-classes')
-                                        },
-                                        {
-                                            icon: <AnalyticsIcon />,
-                                            text: "View Analytics",
-                                            action: () => navigate('/analytics')
                                         }
                                     ].map((action, index) => (
                                         <Button

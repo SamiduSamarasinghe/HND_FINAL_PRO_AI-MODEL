@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     Box,
     Typography,
@@ -25,7 +25,9 @@ import {
     MenuItem,
     Select,
     FormControl,
-    InputLabel
+    InputLabel,
+    Alert,
+    CircularProgress
 } from '@mui/material';
 import {
     Groups as ClassIcon,
@@ -35,72 +37,150 @@ import {
     Edit as EditIcon,
     Delete as DeleteIcon,
     PersonAdd as AddStudentIcon,
-    Search as SearchIcon
+    Search as SearchIcon,
+    Person as PersonIcon,
+    Share as ShareIcon,
+    Assignment as AssignmentIcon
 } from '@mui/icons-material';
-import { useNavigate } from 'react-router-dom';
 
 const TeacherManageClasses = () => {
     const [activeTab, setActiveTab] = useState('classes');
     const [openDialog, setOpenDialog] = useState(false);
+    const [openStudentDialog, setOpenStudentDialog] = useState(false);
+    const [selectedClass, setSelectedClass] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
+    const [success, setSuccess] = useState('');
+    const [classes, setClasses] = useState([]);
     const [newClass, setNewClass] = useState({
         name: '',
-        subject: 'Mathematics',
-        gradeLevel: '10'
+        subject: '',
+        gradeLevel: '10',
+        description: ''
+    });
+    const [newStudent, setNewStudent] = useState({
+        name: '',
+        email: ''
     });
 
-    // Sample data
-    const classes = [
-        {
-            id: 1,
-            name: 'Mathematics 101',
-            subject: 'Mathematics',
-            gradeLevel: '10',
-            students: 32,
-            exams: 5,
-            avgScore: 78
-        },
-        {
-            id: 2,
-            name: 'Physics 201',
-            subject: 'Physics',
-            gradeLevel: '11',
-            students: 28,
-            exams: 3,
-            avgScore: 82
-        },
-        {
-            id: 3,
-            name: 'Advanced Calculus',
-            subject: 'Mathematics',
-            gradeLevel: '12',
-            students: 24,
-            exams: 7,
-            avgScore: 75
+    // Fetch classes from backend
+    const fetchClasses = async () => {
+        try {
+            setLoading(true);
+            const response = await fetch('http://localhost:8088/api/v1/teacher/classes');
+            if (!response.ok) {
+                throw new Error('Failed to fetch classes');
+            }
+            const data = await response.json();
+            setClasses(data.classes || []);
+        } catch (err) {
+            console.error('Error fetching classes:', err);
+            setError('Failed to load classes');
+        } finally {
+            setLoading(false);
         }
-    ];
+    };
 
-    const exams = [
-        { id: 1, title: 'Midterm Exam', date: '2023-11-15', class: 'Mathematics 101' },
-        { id: 2, title: 'Final Exam', date: '2023-12-20', class: 'Mathematics 101' },
-        { id: 3, title: 'Quantum Physics Test', date: '2023-11-22', class: 'Physics 201' }
-    ];
+    useEffect(() => {
+        fetchClasses();
+    }, []);
 
     const handleTabChange = (event, newValue) => {
         setActiveTab(newValue);
     };
 
-    const handleCreateClass = () => {
-        console.log('Creating new class:', newClass);
-        // In real app, this would call an API
-        setOpenDialog(false);
-        setNewClass({ name: '', subject: 'Mathematics', gradeLevel: '10' });
+    const handleCreateClass = async () => {
+        try {
+            setLoading(true);
+            setError('');
+
+            const response = await fetch('http://localhost:8088/api/v1/teacher/classes', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(newClass)
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || 'Failed to create class');
+            }
+
+            const result = await response.json();
+            setSuccess(`Class "${newClass.name}" created successfully!`);
+            setOpenDialog(false);
+            setNewClass({ name: '', subject: '', gradeLevel: '10', description: '' });
+            fetchClasses(); // Refresh the list
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
     };
 
-    const handleAssignExam = (classId) => {
-        console.log('Assigning exam to class:', classId);
-        // Implementation would open exam assignment dialog
+    const handleAddStudent = async () => {
+        if (!selectedClass) return;
+
+        try {
+            setLoading(true);
+            setError('');
+
+            const response = await fetch(`http://localhost:8088/api/v1/teacher/classes/${selectedClass.id}/students`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(newStudent)
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || 'Failed to add student');
+            }
+
+            const result = await response.json();
+            setSuccess(`Student "${newStudent.name}" added successfully!`);
+            setOpenStudentDialog(false);
+            setNewStudent({ name: '', email: '' });
+            fetchClasses(); // Refresh the list
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
     };
+
+    const handleRemoveStudent = async (classId, studentId) => {
+        try {
+            setLoading(true);
+            const response = await fetch(`http://localhost:8088/api/v1/teacher/classes/${classId}/students/${studentId}`, {
+                method: 'DELETE'
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to remove student');
+            }
+
+            setSuccess('Student removed successfully!');
+            fetchClasses(); // Refresh the list
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const openAddStudentDialog = (classItem) => {
+        setSelectedClass(classItem);
+        setOpenStudentDialog(true);
+    };
+
+    const filteredClasses = classes.filter(cls =>
+        cls.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        cls.subject.toLowerCase().includes(searchTerm.toLowerCase())
+    );
 
     return (
         <Box sx={{ p: 3, maxWidth: 1200, margin: '0 auto' }}>
@@ -108,6 +188,18 @@ const TeacherManageClasses = () => {
                 <ClassIcon sx={{ mr: 1, color: 'primary.main' }} />
                 Manage Classes
             </Typography>
+
+            {/* Alerts */}
+            {error && (
+                <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError('')}>
+                    {error}
+                </Alert>
+            )}
+            {success && (
+                <Alert severity="success" sx={{ mb: 3 }} onClose={() => setSuccess('')}>
+                    {success}
+                </Alert>
+            )}
 
             {/* Search and Action Bar */}
             <Paper sx={{ p: 2, mb: 3 }}>
@@ -126,6 +218,7 @@ const TeacherManageClasses = () => {
                         variant="contained"
                         startIcon={<AddIcon />}
                         onClick={() => setOpenDialog(true)}
+                        disabled={loading}
                     >
                         New Class
                     </Button>
@@ -136,144 +229,168 @@ const TeacherManageClasses = () => {
             <Paper sx={{ mb: 3 }}>
                 <Tabs value={activeTab} onChange={handleTabChange}>
                     <Tab label="Classes" value="classes" />
-                    <Tab label="Exam Assignments" value="exams" />
-                    <Tab label="Class Analytics" value="analytics" />
+                    <Tab label="Students" value="students" />
+                    <Tab label="Assignments" value="assignments" />
                 </Tabs>
             </Paper>
 
             {/* Tab Content */}
             {activeTab === 'classes' && (
                 <Grid container spacing={3}>
-                    {classes.map((cls) => (
-                        <Grid item xs={12} sm={6} md={4} key={cls.id}>
-                            <Card variant="outlined" sx={{ height: '100%' }}>
-                                <CardContent>
-                                    <Stack direction="row" justifyContent="space-between">
-                                        <Typography variant="h6">{cls.name}</Typography>
-                                        <Chip label={cls.subject} size="small" />
-                                    </Stack>
-                                    <Typography color="text.secondary" sx={{ mb: 2 }}>
-                                        Grade {cls.gradeLevel} • {cls.students} students
-                                    </Typography>
-
-                                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                                        <Box sx={{ flex: 1 }}>
-                                            <Typography variant="body2">Avg. Score</Typography>
-                                            <Typography variant="h6">{cls.avgScore}%</Typography>
-                                        </Box>
-                                        <Box>
-                                            <Typography variant="body2">Exams</Typography>
-                                            <Typography variant="h6">{cls.exams}</Typography>
-                                        </Box>
-                                    </Box>
-
-                                    <Divider sx={{ my: 1 }} />
-
-                                    <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
-                                        <Button
-                                            variant="outlined"
-                                            size="small"
-                                            startIcon={<ExamIcon />}
-                                            onClick={() => handleAssignExam(cls.id)}
-                                        >
-                                            Assign Exam
-                                        </Button>
-                                        <Button
-                                            variant="outlined"
-                                            size="small"
-                                            startIcon={<AddStudentIcon />}
-                                        >
-                                            Add Students
-                                        </Button>
-                                    </Stack>
-                                </CardContent>
-                            </Card>
+                    {loading ? (
+                        <Grid item xs={12} sx={{ textAlign: 'center', py: 4 }}>
+                            <CircularProgress />
                         </Grid>
-                    ))}
+                    ) : filteredClasses.length === 0 ? (
+                        <Grid item xs={12} sx={{ textAlign: 'center', py: 4 }}>
+                            <Typography color="text.secondary">
+                                {classes.length === 0 ? 'No classes created yet.' : 'No classes match your search.'}
+                            </Typography>
+                        </Grid>
+                    ) : (
+                        filteredClasses.map((cls) => (
+                            <Grid item xs={12} sm={6} md={4} key={cls.id}>
+                                <Card variant="outlined" sx={{ height: '100%' }}>
+                                    <CardContent>
+                                        <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
+                                            <Box sx={{ flex: 1 }}>
+                                                <Typography variant="h6" gutterBottom>{cls.name}</Typography>
+                                                <Chip label={cls.subject} size="small" sx={{ mb: 1 }} />
+                                            </Box>
+                                        </Stack>
+
+                                        <Typography color="text.secondary" sx={{ mb: 2 }}>
+                                            Grade {cls.gradeLevel} • {cls.students?.length || 0} students
+                                        </Typography>
+
+                                        {cls.description && (
+                                            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                                                {cls.description}
+                                            </Typography>
+                                        )}
+
+                                        <Divider sx={{ my: 1 }} />
+
+                                        <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
+                                            <Button
+                                                variant="outlined"
+                                                size="small"
+                                                startIcon={<AddStudentIcon />}
+                                                onClick={() => openAddStudentDialog(cls)}
+                                            >
+                                                Add Students
+                                            </Button>
+                                            <Button
+                                                variant="outlined"
+                                                size="small"
+                                                startIcon={<ExamIcon />}
+                                            >
+                                                Create Assignment
+                                            </Button>
+                                        </Stack>
+                                    </CardContent>
+                                </Card>
+                            </Grid>
+                        ))
+                    )}
                 </Grid>
             )}
 
-            {activeTab === 'exams' && (
+            {activeTab === 'students' && (
                 <Card variant="outlined">
                     <CardContent>
-                        <List>
-                            {exams.map((exam) => (
-                                <ListItem
-                                    key={exam.id}
-                                    secondaryAction={
-                                        <FormControl size="small" sx={{ minWidth: 180 }}>
-                                            <InputLabel>Assign to Class</InputLabel>
-                                            <Select label="Assign to Class">
-                                                {classes.map((cls) => (
-                                                    <MenuItem key={cls.id} value={cls.id}>
-                                                        {cls.name}
-                                                    </MenuItem>
-                                                ))}
-                                            </Select>
-                                        </FormControl>
-                                    }
-                                >
-                                    <ListItemText
-                                        primary={exam.title}
-                                        secondary={`${exam.date} • ${exam.class}`}
-                                    />
-                                </ListItem>
-                            ))}
-                        </List>
+                        <Typography variant="h6" gutterBottom>
+                            All Students by Class
+                        </Typography>
+                        {classes.map((cls) => (
+                            <Paper key={cls.id} sx={{ p: 2, mb: 2 }}>
+                                <Typography variant="subtitle1" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
+                                    <ClassIcon sx={{ mr: 1, fontSize: 20 }} />
+                                    {cls.name} ({cls.students?.length || 0} students)
+                                </Typography>
+
+                                {cls.students && cls.students.length > 0 ? (
+                                    <Grid container spacing={1}>
+                                        {cls.students.map((student) => (
+                                            <Grid item xs={12} sm={6} md={4} key={student.id}>
+                                                <Paper variant="outlined" sx={{ p: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                                        <Avatar sx={{ width: 32, height: 32, mr: 1 }}>
+                                                            <PersonIcon />
+                                                        </Avatar>
+                                                        <Box>
+                                                            <Typography variant="body2">{student.name}</Typography>
+                                                            <Typography variant="caption" color="text.secondary">
+                                                                {student.email}
+                                                            </Typography>
+                                                        </Box>
+                                                    </Box>
+                                                    <IconButton
+                                                        size="small"
+                                                        color="error"
+                                                        onClick={() => handleRemoveStudent(cls.id, student.id)}
+                                                        disabled={loading}
+                                                    >
+                                                        <DeleteIcon />
+                                                    </IconButton>
+                                                </Paper>
+                                            </Grid>
+                                        ))}
+                                    </Grid>
+                                ) : (
+                                    <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 2 }}>
+                                        No students in this class yet.
+                                    </Typography>
+                                )}
+                            </Paper>
+                        ))}
                     </CardContent>
                 </Card>
             )}
 
-            {activeTab === 'analytics' && (
+            {activeTab === 'assignments' && (
                 <Card variant="outlined">
                     <CardContent>
                         <Typography variant="h6" gutterBottom>
-                            Class Performance Overview
+                            Class Assignments
                         </Typography>
-                        <Grid container spacing={3}>
-                            {classes.map((cls) => (
-                                <Grid item xs={12} md={6} key={cls.id}>
-                                    <Paper sx={{ p: 2 }}>
-                                        <Typography variant="subtitle1" gutterBottom>
-                                            {cls.name}
-                                        </Typography>
-                                        <Typography color="text.secondary" gutterBottom>
-                                            Weak Areas: Algebra (32% miss rate), Geometry (28% miss rate)
-                                        </Typography>
-                                        <Button size="small" startIcon={<AnalyticsIcon />}>
-                                            View Detailed Analytics
-                                        </Button>
-                                    </Paper>
-                                </Grid>
-                            ))}
-                        </Grid>
+                        {classes.map((cls) => (
+                            <Paper key={cls.id} sx={{ p: 2, mb: 2 }}>
+                                <Typography variant="subtitle1" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
+                                    <AssignmentIcon sx={{ mr: 1, fontSize: 20 }} />
+                                    {cls.name} Assignments
+                                </Typography>
+                                <Button variant="outlined" startIcon={<AddIcon />} sx={{ mb: 2 }}>
+                                    Create New Assignment
+                                </Button>
+                                <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 2 }}>
+                                    No assignments created yet.
+                                </Typography>
+                            </Paper>
+                        ))}
                     </CardContent>
                 </Card>
             )}
 
             {/* New Class Dialog */}
-            <Dialog open={openDialog} onClose={() => setOpenDialog(false)}>
+            <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth>
                 <DialogTitle>Create New Class</DialogTitle>
                 <DialogContent>
-                    <Stack spacing={2} sx={{ mt: 1, minWidth: 400 }}>
+                    <Stack spacing={2} sx={{ mt: 1 }}>
                         <TextField
-                            label="Class Name"
+                            label="Class Name *"
                             fullWidth
                             value={newClass.name}
                             onChange={(e) => setNewClass({ ...newClass, name: e.target.value })}
+                            placeholder="e.g., Mathematics 101"
                         />
-                        <FormControl fullWidth>
-                            <InputLabel>Subject</InputLabel>
-                            <Select
-                                value={newClass.subject}
-                                label="Subject"
-                                onChange={(e) => setNewClass({ ...newClass, subject: e.target.value })}
-                            >
-                                <MenuItem value="Mathematics">Mathematics</MenuItem>
-                                <MenuItem value="Physics">Physics</MenuItem>
-                                <MenuItem value="Chemistry">Chemistry</MenuItem>
-                            </Select>
-                        </FormControl>
+                        <TextField
+                            label="Subject *"
+                            fullWidth
+                            value={newClass.subject}
+                            onChange={(e) => setNewClass({ ...newClass, subject: e.target.value })}
+                            placeholder="e.g., Mathematics, Physics, Chemistry"
+                        />
                         <FormControl fullWidth>
                             <InputLabel>Grade Level</InputLabel>
                             <Select
@@ -287,6 +404,15 @@ const TeacherManageClasses = () => {
                                 <MenuItem value="12">Grade 12</MenuItem>
                             </Select>
                         </FormControl>
+                        <TextField
+                            label="Description (Optional)"
+                            fullWidth
+                            multiline
+                            rows={3}
+                            value={newClass.description}
+                            onChange={(e) => setNewClass({ ...newClass, description: e.target.value })}
+                            placeholder="Class description, objectives, or notes..."
+                        />
                     </Stack>
                 </DialogContent>
                 <DialogActions>
@@ -294,9 +420,45 @@ const TeacherManageClasses = () => {
                     <Button
                         variant="contained"
                         onClick={handleCreateClass}
-                        disabled={!newClass.name}
+                        disabled={!newClass.name || !newClass.subject || loading}
                     >
-                        Create
+                        {loading ? 'Creating...' : 'Create Class'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* Add Student Dialog */}
+            <Dialog open={openStudentDialog} onClose={() => setOpenStudentDialog(false)} maxWidth="sm" fullWidth>
+                <DialogTitle>
+                    Add Student to {selectedClass?.name}
+                </DialogTitle>
+                <DialogContent>
+                    <Stack spacing={2} sx={{ mt: 1 }}>
+                        <TextField
+                            label="Student Name *"
+                            fullWidth
+                            value={newStudent.name}
+                            onChange={(e) => setNewStudent({ ...newStudent, name: e.target.value })}
+                            placeholder="Full name of the student"
+                        />
+                        <TextField
+                            label="Student Email *"
+                            fullWidth
+                            type="email"
+                            value={newStudent.email}
+                            onChange={(e) => setNewStudent({ ...newStudent, email: e.target.value })}
+                            placeholder="student@email.com"
+                        />
+                    </Stack>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setOpenStudentDialog(false)}>Cancel</Button>
+                    <Button
+                        variant="contained"
+                        onClick={handleAddStudent}
+                        disabled={!newStudent.name || !newStudent.email || loading}
+                    >
+                        {loading ? 'Adding...' : 'Add Student'}
                     </Button>
                 </DialogActions>
             </Dialog>

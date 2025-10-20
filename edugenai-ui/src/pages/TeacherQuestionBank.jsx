@@ -19,19 +19,21 @@ import {
     MenuItem,
     CircularProgress,
     Alert,
-    Tooltip
+    Tooltip,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions
 } from '@mui/material';
 import {
     Search as SearchIcon,
-    FilterList as FilterIcon,
-    Add as AddIcon,
     CheckCircle as CheckCircleIcon,
     RadioButtonUnchecked as RadioButtonUncheckedIcon,
-    Article as ArticleIcon,
     Quiz as QuizIcon,
     School as SchoolIcon,
     Refresh as RefreshIcon,
-    ContentCopy as RepeatedIcon
+    ContentCopy as RepeatedIcon,
+    Share as ShareIcon
 } from '@mui/icons-material';
 import backgroundImage from '../assets/pngtree-home-based-e-learning-and-online-education-in-a-3d-illustration-picture-image_7253729.jpg';
 
@@ -40,7 +42,6 @@ const TeacherQuestionBank = () => {
     const [filters, setFilters] = useState({
         subject: "",
         type: "",
-        topic: "",
         difficulty: ""
     });
     const [selectedQuestions, setSelectedQuestions] = useState([]);
@@ -50,82 +51,92 @@ const TeacherQuestionBank = () => {
     const [error, setError] = useState('');
     const [refreshing, setRefreshing] = useState(false);
     const [subjects, setSubjects] = useState([]);
+    const [shareDialogOpen, setShareDialogOpen] = useState(false);
+    const [selectedClass, setSelectedClass] = useState('');
+    const [assignmentTitle, setAssignmentTitle] = useState('');
 
-    // Fetch subjects from backend
-    const fetchSubjects = async () => {
-        try {
-            const response = await fetch('http://localhost:8088/api/v1/subjects');
-            if (!response.ok) {
-                throw new Error('Failed to fetch subjects');
-            }
-            const data = await response.json();
-            console.log('Subjects response:', data);
+    // Mock teacher classes - replace with real data from API
+    const teacherClasses = [
+        { id: 'math101', name: 'Mathematics 101', students: 32 },
+        { id: 'physics201', name: 'Physics 201', students: 28 },
+        { id: 'advCalc', name: 'Advanced Calculus', students: 24 },
+        { id: 'stats', name: 'Statistics', students: 35 }
+    ];
 
-            if (data.subjects && Array.isArray(data.subjects)) {
-                const subjectNames = data.subjects.map(subject =>
-                    typeof subject === 'string' ? subject : subject.name || subject.id
-                );
-                setSubjects(subjectNames);
-            } else {
-                setSubjects([]);
-            }
-        } catch (err) {
-            console.error('Error fetching subjects:', err);
-            setError('Failed to load subjects');
-        }
-    };
-
-    // Fetch questions from backend
-    const fetchQuestions = async (subjectFilter = '') => {
+    // Fetch all data - using the same pattern as student QuestionBank
+    const fetchData = async () => {
         try {
             setLoading(true);
             setError('');
 
-            let url = 'http://localhost:8088/api/v1/questions';
-            if (subjectFilter) {
-                url += `?subject=${encodeURIComponent(subjectFilter)}`;
+            console.log('Fetching data from backend...');
+
+            // First, get subjects
+            const subjectsResponse = await fetch('http://localhost:8088/api/v1/subjects');
+
+            if (!subjectsResponse.ok) {
+                throw new Error(`Failed to fetch subjects: ${subjectsResponse.status}`);
             }
 
-            const response = await fetch(url);
-            if (!response.ok) {
-                throw new Error('Failed to fetch questions');
+            const subjectsData = await subjectsResponse.json();
+            console.log('Subjects response:', subjectsData);
+
+            let subjectNames = [];
+            if (subjectsData.subjects && subjectsData.subjects.length > 0) {
+                subjectNames = subjectsData.subjects.map(subject =>
+                    typeof subject === 'string' ? subject : subject.name || subject.id
+                );
             }
 
-            const data = await response.json();
-            console.log('Questions response:', data);
+            setSubjects(subjectNames);
+            console.log('Available subjects:', subjectNames);
 
-            if (data.questions && Array.isArray(data.questions)) {
-                // Transform backend data to match frontend format
-                const transformedQuestions = data.questions.map((q, index) => ({
-                    id: q.id || `q-${index}`,
-                    text: q.text || 'No question text',
-                    type: q.type || 'MCQ',
-                    subject: q.subject || 'General',
-                    topic: q.topic || q.subject || 'General',
-                    difficulty: mapDifficulty(q.points),
-                    options: q.options || [],
-                    correct_answer: q.correct_answer || '',
-                    points: q.points || 2,
-                    source: q.source || 'extracted',
-                    source_file: q.source_file || 'Unknown',
-                    created_at: q.created_at || new Date().toISOString(),
-                    // Calculate repetition
-                    repetitionCount: calculateRepetitionCount(q, data.questions),
-                    isRepeated: calculateIsRepeated(q, data.questions)
-                }));
+            // Try to get all questions directly
+            let allQuestions = [];
+            try {
+                const questionsResponse = await fetch('http://localhost:8088/api/v1/questions');
+                if (questionsResponse.ok) {
+                    const questionsData = await questionsResponse.json();
+                    if (questionsData.questions) {
+                        allQuestions = questionsData.questions.map((q, index) => ({
+                            id: q.id || `q-${index}-${Date.now()}`,
+                            text: q.text || 'No question text',
+                            type: q.type || 'MCQ',
+                            subject: q.subject || 'General',
+                            topic: q.topic || q.subject || 'General',
+                            difficulty: mapDifficulty(q.points),
+                            options: q.options || [],
+                            correct_answer: q.correct_answer || '',
+                            points: q.points || 2,
+                            source: q.source || 'extracted',
+                            source_file: q.source_file || 'Unknown',
+                            created_at: q.created_at || new Date().toISOString(),
+                            repetitionCount: calculateRepetitionCount(q, questionsData.questions),
+                            isRepeated: calculateIsRepeated(q, questionsData.questions)
+                        }));
+                        console.log(`Loaded ${allQuestions.length} questions from direct endpoint`);
+                    }
+                } else if (questionsResponse.status === 404) {
+                    console.log('Questions endpoint not found, showing empty state');
+                    setError('Questions API endpoint not available. Please check backend implementation.');
+                    return;
+                }
+            } catch (err) {
+                console.log('Questions endpoint failed:', err);
+                setError('Cannot connect to questions API. Please make sure the backend is running.');
+                return;
+            }
 
-                setQuestions(transformedQuestions);
-                setFilteredQuestions(transformedQuestions);
-            } else {
-                setQuestions([]);
-                setFilteredQuestions([]);
+            setQuestions(allQuestions);
+            setFilteredQuestions(allQuestions);
+
+            if (allQuestions.length === 0) {
+                setError('No questions found in the database. Please upload some papers first.');
             }
 
         } catch (err) {
-            console.error('Error fetching questions:', err);
-            setError(`Failed to load questions: ${err.message}`);
-            setQuestions([]);
-            setFilteredQuestions([]);
+            console.error('Error fetching data:', err);
+            setError(`Failed to load data: ${err.message}`);
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -158,16 +169,8 @@ const TeacherQuestionBank = () => {
         return "Hard";
     };
 
-    // Helper function to calculate average score based on points
-    const calculateAvgScore = (points) => {
-        if (points <= 2) return 0.8 + Math.random() * 0.15;
-        if (points <= 5) return 0.6 + Math.random() * 0.25;
-        return 0.4 + Math.random() * 0.3;
-    };
-
     useEffect(() => {
-        fetchSubjects();
-        fetchQuestions();
+        fetchData();
     }, []);
 
     useEffect(() => {
@@ -180,25 +183,22 @@ const TeacherQuestionBank = () => {
         // Search filter
         if (searchTerm) {
             filtered = filtered.filter(q =>
-                q.text.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                q.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                (q.text && q.text.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                (q.subject && q.subject.toLowerCase().includes(searchTerm.toLowerCase())) ||
                 (q.topic && q.topic.toLowerCase().includes(searchTerm.toLowerCase()))
             );
         }
 
         // Subject filter
         if (filters.subject) {
-            filtered = filtered.filter(q => q.subject === filters.subject);
+            filtered = filtered.filter(q =>
+                q.subject && q.subject.toLowerCase() === filters.subject.toLowerCase()
+            );
         }
 
         // Type filter
         if (filters.type) {
             filtered = filtered.filter(q => q.type === filters.type);
-        }
-
-        // Topic filter
-        if (filters.topic) {
-            filtered = filtered.filter(q => q.topic === filters.topic);
         }
 
         // Difficulty filter
@@ -215,14 +215,10 @@ const TeacherQuestionBank = () => {
             ...prev,
             [name]: value
         }));
+    };
 
-        // If subject filter changes, fetch questions for that subject
-        if (name === 'subject' && value) {
-            fetchQuestions(value);
-        } else if (name === 'subject' && !value) {
-            // If subject filter is cleared, fetch all questions
-            fetchQuestions();
-        }
+    const handleSearchChange = (e) => {
+        setSearchTerm(e.target.value);
     };
 
     const toggleQuestionSelect = (id) => {
@@ -235,22 +231,61 @@ const TeacherQuestionBank = () => {
 
     const refreshData = () => {
         setRefreshing(true);
-        if (filters.subject) {
-            fetchQuestions(filters.subject);
-        } else {
-            fetchQuestions();
-        }
+        fetchData();
     };
 
     const clearFilters = () => {
         setFilters({
             subject: "",
             type: "",
-            topic: "",
             difficulty: ""
         });
         setSearchTerm("");
-        fetchQuestions();
+    };
+
+    const handleShareToClass = async () => {
+        if (!selectedClass || !assignmentTitle) {
+            setError('Please select a class and enter assignment title');
+            return;
+        }
+
+        try {
+            const selectedQuestionsData = questions.filter(q => selectedQuestions.includes(q.id));
+
+            // Create assignment
+            const assignmentData = {
+                classId: selectedClass,
+                title: assignmentTitle,
+                content: JSON.stringify(selectedQuestionsData),
+                type: 'question_bank',
+                dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+            };
+
+            const response = await fetch('http://localhost:8088/api/v1/teacher/assignments', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(assignmentData)
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to create assignment');
+            }
+
+            const result = await response.json();
+            console.log('Assignment created:', result);
+
+            setShareDialogOpen(false);
+            setSelectedClass('');
+            setAssignmentTitle('');
+            setSelectedQuestions([]);
+
+            alert('Assignment created successfully!');
+
+        } catch (err) {
+            setError(`Failed to create assignment: ${err.message}`);
+        }
     };
 
     const getQuestionTypeColor = (type) => {
@@ -266,10 +301,6 @@ const TeacherQuestionBank = () => {
         if (count >= 4) return 'error';
         if (count >= 2) return 'warning';
         return 'success';
-    };
-
-    const getUniqueTopics = () => {
-        return Array.from(new Set(questions.map(q => q.topic).filter(Boolean)));
     };
 
     if (loading) {
@@ -315,9 +346,15 @@ const TeacherQuestionBank = () => {
                     >
                         {refreshing ? 'Refreshing...' : 'Refresh'}
                     </Button>
-                    <Button variant="contained" startIcon={<AddIcon />}>
-                        Add Question
-                    </Button>
+                    {selectedQuestions.length > 0 && (
+                        <Button
+                            variant="contained"
+                            startIcon={<ShareIcon />}
+                            onClick={() => setShareDialogOpen(true)}
+                        >
+                            Share to Class ({selectedQuestions.length})
+                        </Button>
+                    )}
                 </Box>
             </Box>
 
@@ -337,7 +374,7 @@ const TeacherQuestionBank = () => {
                             variant="outlined"
                             placeholder="Search questions, subjects, or topics..."
                             value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
+                            onChange={handleSearchChange}
                             InputProps={{
                                 startAdornment: (
                                     <InputAdornment position="start">
@@ -393,16 +430,6 @@ const TeacherQuestionBank = () => {
                                     <MenuItem value="Hard">Hard</MenuItem>
                                 </Select>
                             </FormControl>
-
-                            <Button
-                                variant="outlined"
-                                startIcon={<FilterIcon />}
-                                onClick={clearFilters}
-                                size="small"
-                                sx={{ minHeight: '40px' }}
-                            >
-                                Clear
-                            </Button>
                         </Stack>
                     </Grid>
                 </Grid>
@@ -413,31 +440,12 @@ const TeacherQuestionBank = () => {
                 <Typography variant="h6">
                     {filteredQuestions.length} Questions Found
                     {filters.subject && ` in ${filters.subject}`}
+                    {selectedQuestions.length > 0 && ` • ${selectedQuestions.length} selected`}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
                     {questions.length} total questions in database
                 </Typography>
             </Box>
-
-            {/* Action Bar */}
-            {selectedQuestions.length > 0 && (
-                <Paper sx={{ p: 2, mb: 2, bgcolor: 'action.selected' }}>
-                    <Stack direction="row" spacing={2} alignItems="center">
-                        <Typography>
-                            {selectedQuestions.length} selected
-                        </Typography>
-                        <Button variant="outlined" size="small">
-                            Add to Exam
-                        </Button>
-                        <Button variant="outlined" size="small">
-                            Export
-                        </Button>
-                        <Button variant="outlined" size="small" onClick={() => setSelectedQuestions([])}>
-                            Clear
-                        </Button>
-                    </Stack>
-                </Paper>
-            )}
 
             {/* Questions Grid */}
             <Grid container spacing={3}>
@@ -546,6 +554,49 @@ const TeacherQuestionBank = () => {
                     </Typography>
                 </Box>
             )}
+
+            {/* Share to Class Dialog */}
+            <Dialog open={shareDialogOpen} onClose={() => setShareDialogOpen(false)} maxWidth="sm" fullWidth>
+                <DialogTitle>Share Questions to Class</DialogTitle>
+                <DialogContent>
+                    <FormControl fullWidth sx={{ mt: 2 }}>
+                        <InputLabel>Select Class</InputLabel>
+                        <Select
+                            value={selectedClass}
+                            label="Select Class"
+                            onChange={(e) => setSelectedClass(e.target.value)}
+                        >
+                            <MenuItem value="" disabled>Select a class</MenuItem>
+                            {teacherClasses.map((cls) => (
+                                <MenuItem key={cls.id} value={cls.id}>
+                                    {cls.name}
+                                </MenuItem>
+                            ))}
+                        </Select>
+                    </FormControl>
+                    <TextField
+                        fullWidth
+                        label="Assignment Title"
+                        value={assignmentTitle}
+                        onChange={(e) => setAssignmentTitle(e.target.value)}
+                        sx={{ mt: 2 }}
+                        placeholder="e.g., Mathematics Quiz Week 1"
+                    />
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+                        {selectedQuestions.length} questions will be shared as an assignment.
+                    </Typography>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setShareDialogOpen(false)}>Cancel</Button>
+                    <Button
+                        variant="contained"
+                        onClick={handleShareToClass}
+                        disabled={!selectedClass || !assignmentTitle}
+                    >
+                        Create Assignment
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </Box>
     );
 };

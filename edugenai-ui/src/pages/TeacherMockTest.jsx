@@ -21,13 +21,19 @@ import {
     Slider,
     Grid,
     FormControlLabel,
-    Alert
+    Alert,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions,
+    TextField
 } from '@mui/material';
-import { MenuBook, Psychology, ContentCopy, Download, Class as ClassIcon } from '@mui/icons-material';
+import { MenuBook, Psychology, ContentCopy, Download, Class as ClassIcon, Save, Share } from '@mui/icons-material';
 
 const TeacherMockTest = () => {
     const [subject, setSubject] = useState('');
     const [classGroup, setClassGroup] = useState('');
+    const [paperTitle, setPaperTitle] = useState('');
     const [questionTypes, setQuestionTypes] = useState({
         MCQ: true,
         "Short Answer": true,
@@ -39,6 +45,8 @@ const TeacherMockTest = () => {
     const [error, setError] = useState('');
     const [subjects, setSubjects] = useState([]);
     const [loadingSubjects, setLoadingSubjects] = useState(true);
+    const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+    const [savedPaperTitle, setSavedPaperTitle] = useState('');
 
     // Teacher-specific data
     const teacherClasses = [
@@ -60,7 +68,7 @@ const TeacherMockTest = () => {
                 setSubjects(data.subjects || []);
             } catch (err) {
                 console.error('Error fetching subjects:', err);
-                setError('Failed to load subjects');
+                setError('Failed to load subjects. Please make sure the backend server is running.');
             } finally {
                 setLoadingSubjects(false);
             }
@@ -70,6 +78,11 @@ const TeacherMockTest = () => {
     }, []);
 
     const handleGenerate = async () => {
+        if (!subject) {
+            setError('Please select a subject');
+            return;
+        }
+
         setIsGenerating(true);
         setError('');
         setGeneratedTest(null);
@@ -94,6 +107,12 @@ const TeacherMockTest = () => {
             }
 
             const testData = await response.json();
+
+            // Add custom title if provided
+            if (paperTitle) {
+                testData.title = paperTitle;
+            }
+
             setGeneratedTest(testData);
 
         } catch (err) {
@@ -104,25 +123,122 @@ const TeacherMockTest = () => {
         }
     };
 
+    const handleDownloadPDF = async () => {
+        if (!generatedTest) return;
+
+        try {
+            setIsGenerating(true);
+            const response = await fetch('http://localhost:8088/api/v1/export/test-pdf', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(generatedTest)
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to generate PDF');
+            }
+
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+
+            const filename = `${generatedTest.subject}_${paperTitle || 'exam'}.pdf`.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+            a.download = filename;
+
+            document.body.appendChild(a);
+            a.click();
+
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+
+        } catch (error) {
+            console.error('PDF download error:', error);
+            setError('Failed to download PDF. Please try again.');
+        } finally {
+            setIsGenerating(false);
+        }
+    };
+
     const copyToClipboard = (text) => {
         navigator.clipboard.writeText(text);
+        // You can add a snackbar/toast notification here
+        alert('Copied to clipboard!');
     };
 
     const resetForm = () => {
         setGeneratedTest(null);
         setSubject('');
         setClassGroup('');
+        setPaperTitle('');
         setError('');
     };
 
+    const handleSavePaper = async () => {
+        if (!savedPaperTitle.trim()) {
+            setError('Please enter a title for the paper');
+            return;
+        }
+
+        try {
+            // Here you would typically save to your backend
+            // For now, we'll simulate saving
+            const paperData = {
+                ...generatedTest,
+                title: savedPaperTitle,
+                class_id: classGroup,
+                saved_at: new Date().toISOString()
+            };
+
+            // Simulate API call
+            console.log('Saving paper:', paperData);
+
+            // In a real app, you would do:
+            // const response = await fetch('/api/v1/save-paper', {
+            //     method: 'POST',
+            //     headers: { 'Content-Type': 'application/json' },
+            //     body: JSON.stringify(paperData)
+            // });
+
+            alert(`Paper "${savedPaperTitle}" saved successfully!`);
+            setSaveDialogOpen(false);
+            setSavedPaperTitle('');
+
+        } catch (err) {
+            setError('Failed to save paper: ' + err.message);
+        }
+    };
+
+    const handlePublishToClass = () => {
+        if (!classGroup) {
+            setError('Please select a class first');
+            return;
+        }
+
+        const selectedClass = teacherClasses.find(cls => cls.id === classGroup);
+        if (selectedClass) {
+            alert(`Paper published to ${selectedClass.name}! ${selectedClass.students} students will now have access.`);
+        } else {
+            alert('Paper published to class!');
+        }
+    };
+
+    const getQuestionTypeCount = (type) => {
+        if (!generatedTest) return 0;
+        return generatedTest.questions.filter(q => q.type === type).length;
+    };
+
     return (
-        <Box sx={{ p: 3, maxWidth: 1000, margin: '0 auto' }}>
-            <Typography variant="h4" gutterBottom sx={{ fontWeight: 'bold', mb: 2 }}>
+        <Box sx={{ p: 3, maxWidth: 1200, margin: '0 auto', minHeight: '100vh' }}>
+            <Typography variant="h4" gutterBottom sx={{ fontWeight: 'bold', mb: 2, color: 'primary.main' }}>
                 Create New Exam Paper
             </Typography>
 
             {!generatedTest ? (
-                <Card sx={{ boxShadow: 3, p: 3 }}>
+                <Card sx={{ boxShadow: 3, p: 3, borderRadius: 2 }}>
                     <CardContent>
                         <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
                             <MenuBook color="primary" sx={{ fontSize: 32, mr: 2 }} />
@@ -138,17 +254,36 @@ const TeacherMockTest = () => {
                         {isGenerating ? (
                             <Box sx={{ textAlign: 'center', py: 4 }}>
                                 <LinearProgress sx={{ mb: 2 }} />
-                                <Typography>Generating exam questions...</Typography>
+                                <Typography variant="h6" color="primary">
+                                    Generating exam questions...
+                                </Typography>
+                                <Typography variant="body2" color="text.secondary">
+                                    This may take a few moments
+                                </Typography>
                             </Box>
                         ) : (
-                            <Grid container spacing={3}>
-                                {/* Left Column */}
+                            <Grid container spacing={4}>
+                                {/* Left Column - Basic Settings */}
                                 <Grid item xs={12} md={6}>
+                                    <Typography variant="h6" gutterBottom sx={{ mb: 3, color: 'primary.main' }}>
+                                        Paper Settings
+                                    </Typography>
+
+                                    <TextField
+                                        fullWidth
+                                        label="Paper Title (Optional)"
+                                        value={paperTitle}
+                                        onChange={(e) => setPaperTitle(e.target.value)}
+                                        placeholder="e.g., Mathematics Final Exam 2024"
+                                        sx={{ mb: 3 }}
+                                        helperText="Leave empty to use auto-generated title"
+                                    />
+
                                     <FormControl fullWidth sx={{ mb: 3 }}>
-                                        <InputLabel>Class</InputLabel>
+                                        <InputLabel>Class *</InputLabel>
                                         <Select
                                             value={classGroup}
-                                            label="Class"
+                                            label="Class *"
                                             onChange={(e) => setClassGroup(e.target.value)}
                                         >
                                             <MenuItem value="" disabled>Select a class</MenuItem>
@@ -161,10 +296,10 @@ const TeacherMockTest = () => {
                                     </FormControl>
 
                                     <FormControl fullWidth sx={{ mb: 3 }}>
-                                        <InputLabel>Subject</InputLabel>
+                                        <InputLabel>Subject *</InputLabel>
                                         <Select
                                             value={subject}
-                                            label="Subject"
+                                            label="Subject *"
                                             onChange={(e) => setSubject(e.target.value)}
                                             disabled={loadingSubjects}
                                         >
@@ -173,49 +308,71 @@ const TeacherMockTest = () => {
                                             </MenuItem>
                                             {subjects.map((sub) => (
                                                 <MenuItem key={sub.id} value={sub.id}>
-                                                    {sub.name} ({sub.total_questions} questions)
+                                                    {sub.name} ({sub.total_questions || 0} questions available)
                                                 </MenuItem>
                                             ))}
                                         </Select>
                                     </FormControl>
                                 </Grid>
 
-                                {/* Right Column */}
+                                {/* Right Column - Question Settings */}
                                 <Grid item xs={12} md={6}>
-                                    <Typography variant="subtitle1" gutterBottom>
+                                    <Typography variant="h6" gutterBottom sx={{ mb: 3, color: 'primary.main' }}>
+                                        Question Settings
+                                    </Typography>
+
+                                    <Typography variant="subtitle1" gutterBottom sx={{ mt: 2 }}>
                                         Question Types
                                     </Typography>
-                                    <Stack direction="row" spacing={3} sx={{ mb: 3 }}>
+                                    <Stack direction="column" spacing={1} sx={{ mb: 3 }}>
                                         <FormControlLabel
                                             control={
                                                 <Checkbox
                                                     checked={questionTypes.MCQ}
                                                     onChange={(e) => setQuestionTypes({...questionTypes, MCQ: e.target.checked})}
+                                                    color="primary"
                                                 />
                                             }
-                                            label="MCQ (2 pts)"
+                                            label={
+                                                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                                    <Typography>Multiple Choice (MCQ)</Typography>
+                                                    <Chip label="2 pts" size="small" sx={{ ml: 1 }} color="primary" variant="outlined" />
+                                                </Box>
+                                            }
                                         />
                                         <FormControlLabel
                                             control={
                                                 <Checkbox
                                                     checked={questionTypes["Short Answer"]}
                                                     onChange={(e) => setQuestionTypes({...questionTypes, "Short Answer": e.target.checked})}
+                                                    color="primary"
                                                 />
                                             }
-                                            label="Short Answer (5 pts)"
+                                            label={
+                                                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                                    <Typography>Short Answer</Typography>
+                                                    <Chip label="5 pts" size="small" sx={{ ml: 1 }} color="secondary" variant="outlined" />
+                                                </Box>
+                                            }
                                         />
                                         <FormControlLabel
                                             control={
                                                 <Checkbox
                                                     checked={questionTypes.Essay}
                                                     onChange={(e) => setQuestionTypes({...questionTypes, Essay: e.target.checked})}
+                                                    color="primary"
                                                 />
                                             }
-                                            label="Essay (10 pts)"
+                                            label={
+                                                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                                    <Typography>Essay Questions</Typography>
+                                                    <Chip label="10 pts" size="small" sx={{ ml: 1 }} color="info" variant="outlined" />
+                                                </Box>
+                                            }
                                         />
                                     </Stack>
 
-                                    <Typography variant="subtitle1" gutterBottom>
+                                    <Typography variant="subtitle1" gutterBottom sx={{ mt: 3 }}>
                                         Number of Questions: {questionCount}
                                     </Typography>
                                     <Slider
@@ -224,111 +381,215 @@ const TeacherMockTest = () => {
                                         min={5}
                                         max={50}
                                         step={5}
+                                        valueLabelDisplay="auto"
                                         marks={[
                                             { value: 5, label: '5' },
+                                            { value: 15, label: '15' },
                                             { value: 25, label: '25' },
+                                            { value: 35, label: '35' },
                                             { value: 50, label: '50' }
                                         ]}
                                         sx={{ mb: 4 }}
+                                        color="primary"
                                     />
                                 </Grid>
                             </Grid>
                         )}
 
-                        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
+                        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4, gap: 2 }}>
+                            <Button
+                                variant="outlined"
+                                size="large"
+                                onClick={resetForm}
+                                disabled={isGenerating}
+                                sx={{ px: 4, py: 1.5 }}
+                            >
+                                Clear All
+                            </Button>
                             <Button
                                 variant="contained"
                                 size="large"
                                 startIcon={<Psychology />}
                                 onClick={handleGenerate}
-                                disabled={!subject}
+                                disabled={!subject || isGenerating}
                                 sx={{ px: 4, py: 1.5 }}
                             >
-                                Generate Exam Paper
+                                {isGenerating ? 'Generating...' : 'Generate Exam Paper'}
                             </Button>
                         </Box>
                     </CardContent>
                 </Card>
             ) : (
-                <Card sx={{ boxShadow: 3 }}>
-                    <CardContent>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-                            <Typography variant="h5">
-                                {generatedTest.title}
-                            </Typography>
-                            <Chip
-                                label={`Total Points: ${generatedTest.total_points}`}
-                                color="primary"
-                                variant="outlined"
-                            />
-                        </Box>
-
-                        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                            <ClassIcon color="primary" sx={{ mr: 1 }} />
-                            <Typography>
-                                {generatedTest.total_questions} questions
-                            </Typography>
-                        </Box>
-
-                        <Divider sx={{ my: 2 }} />
-
-                        <Box sx={{ position: 'relative' }}>
-                            <Typography variant="h6" gutterBottom>
-                                Exam Summary
-                            </Typography>
+                <Card sx={{ boxShadow: 3, borderRadius: 2 }}>
+                    <CardContent sx={{ p: 4 }}>
+                        {/* Header Section */}
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
+                            <Box>
+                                <Typography variant="h4" gutterBottom sx={{ fontWeight: 'bold' }}>
+                                    {generatedTest.title}
+                                </Typography>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+                                    <Chip
+                                        icon={<ClassIcon />}
+                                        label={`${generatedTest.total_questions} questions`}
+                                        color="primary"
+                                        variant="outlined"
+                                    />
+                                    <Chip
+                                        label={`Total Points: ${generatedTest.total_points}`}
+                                        color="success"
+                                        variant="outlined"
+                                    />
+                                    <Chip
+                                        label={generatedTest.subject.replace('-', ' ').toUpperCase()}
+                                        color="secondary"
+                                    />
+                                </Box>
+                            </Box>
                             <Button
                                 size="small"
                                 startIcon={<ContentCopy />}
                                 onClick={() => copyToClipboard(generatedTest.title)}
-                                sx={{ position: 'absolute', right: 0, top: 0 }}
+                                variant="outlined"
                             >
-                                Copy
+                                Copy Title
                             </Button>
-                            <Typography paragraph sx={{ bgcolor: '#f5f5f5', p: 2, borderRadius: 1 }}>
-                                This exam contains {generatedTest.total_questions} questions
-                                on {generatedTest.subject.replace('-', ' ')} with a total of {generatedTest.total_points} points.
-                            </Typography>
                         </Box>
 
-                        <Typography variant="h6" gutterBottom sx={{ mt: 3 }}>
-                            Questions ({generatedTest.questions.length})
+                        <Divider sx={{ my: 3 }} />
+
+                        {/* Question Type Summary */}
+                        <Box sx={{ mb: 4 }}>
+                            <Typography variant="h6" gutterBottom>
+                                Question Distribution
+                            </Typography>
+                            <Stack direction="row" spacing={2} sx={{ flexWrap: 'wrap', gap: 1 }}>
+                                <Chip
+                                    label={`${getQuestionTypeCount('MCQ')} MCQ Questions`}
+                                    color="primary"
+                                    variant="outlined"
+                                />
+                                <Chip
+                                    label={`${getQuestionTypeCount('Short Answer')} Short Answer`}
+                                    color="secondary"
+                                    variant="outlined"
+                                />
+                                <Chip
+                                    label={`${getQuestionTypeCount('Essay')} Essay Questions`}
+                                    color="info"
+                                    variant="outlined"
+                                />
+                            </Stack>
+                        </Box>
+
+                        {/* Questions List */}
+                        <Typography variant="h6" gutterBottom sx={{ mt: 4 }}>
+                            Questions Preview
                         </Typography>
-                        <List sx={{ maxHeight: 400, overflow: 'auto' }}>
+                        <List sx={{ maxHeight: 500, overflow: 'auto', border: '1px solid', borderColor: 'divider', borderRadius: 1, p: 1 }}>
                             {generatedTest.questions.map((question, index) => (
-                                <ListItem key={index} divider sx={{ alignItems: 'flex-start' }}>
-                                    <ListItemIcon sx={{ minWidth: 36, pt: 1 }}>
+                                <ListItem key={index} divider sx={{ alignItems: 'flex-start', py: 2 }}>
+                                    <ListItemIcon sx={{ minWidth: 44, pt: 1 }}>
                                         <Chip
-                                            label={question.type}
+                                            label={`${index + 1}`}
                                             size="small"
                                             color="primary"
+                                            variant="outlined"
                                         />
                                     </ListItemIcon>
-                                    <ListItemText
-                                        primary={`${index + 1}. ${question.text}`}
-                                        secondary={`${question.points} point${question.points !== 1 ? 's' : ''}`}
-                                    />
+                                    <Box sx={{ flexGrow: 1 }}>
+                                        <ListItemText
+                                            primary={
+                                                <Typography variant="body1" sx={{ fontWeight: 500, mb: 1 }}>
+                                                    {question.text}
+                                                </Typography>
+                                            }
+                                            secondary={
+                                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1 }}>
+                                                    <Chip
+                                                        label={question.type}
+                                                        size="small"
+                                                        color={
+                                                            question.type === "MCQ" ? "primary" :
+                                                                question.type === "Short Answer" ? "secondary" : "info"
+                                                        }
+                                                    />
+                                                    <Typography variant="body2" color="text.secondary">
+                                                        {question.points} point{question.points !== 1 ? 's' : ''}
+                                                    </Typography>
+                                                </Box>
+                                            }
+                                        />
+                                        {question.type === 'MCQ' && question.options && (
+                                            <Box sx={{ mt: 1, pl: 2 }}>
+                                                <Typography variant="body2" color="text.secondary" gutterBottom>
+                                                    Options:
+                                                </Typography>
+                                                <Grid container spacing={1}>
+                                                    {question.options.map((option, optIndex) => (
+                                                        <Grid item xs={12} sm={6} key={optIndex}>
+                                                            <Box sx={{
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                p: 1,
+                                                                borderRadius: 1,
+                                                                bgcolor: 'grey.50',
+                                                                border: question.correct_answer === String.fromCharCode(65 + optIndex) ? '2px solid' : '1px solid',
+                                                                borderColor: question.correct_answer === String.fromCharCode(65 + optIndex) ? 'success.main' : 'grey.300',
+                                                            }}>
+                                                                <Typography
+                                                                    variant="body2"
+                                                                    sx={{
+                                                                        fontWeight: question.correct_answer === String.fromCharCode(65 + optIndex) ? 'bold' : 'normal',
+                                                                        color: question.correct_answer === String.fromCharCode(65 + optIndex) ? 'success.main' : 'inherit',
+                                                                    }}
+                                                                >
+                                                                    {String.fromCharCode(65 + optIndex)}) {option}
+                                                                </Typography>
+                                                            </Box>
+                                                        </Grid>
+                                                    ))}
+                                                </Grid>
+                                            </Box>
+                                        )}
+                                    </Box>
                                 </ListItem>
                             ))}
                         </List>
 
-                        <Stack direction="row" spacing={2} sx={{ mt: 3 }}>
+                        {/* Action Buttons */}
+                        <Stack direction="row" spacing={2} sx={{ mt: 4, flexWrap: 'wrap', gap: 2 }}>
                             <Button
                                 variant="contained"
                                 startIcon={<Download />}
-                                onClick={() => alert("PDF generation would be implemented here")}
+                                onClick={handleDownloadPDF}
+                                disabled={isGenerating}
+                                size="large"
                             >
-                                Download Exam
+                                {isGenerating ? 'Generating PDF...' : 'Download Exam PDF'}
                             </Button>
                             <Button
                                 variant="contained"
                                 color="success"
-                                onClick={() => alert("Publishing to class...")}
+                                startIcon={<Save />}
+                                onClick={() => setSaveDialogOpen(true)}
+                                size="large"
+                            >
+                                Save Paper
+                            </Button>
+                            <Button
+                                variant="contained"
+                                color="secondary"
+                                startIcon={<Share />}
+                                onClick={handlePublishToClass}
+                                size="large"
                             >
                                 Publish to Class
                             </Button>
                             <Button
                                 variant="outlined"
                                 onClick={resetForm}
+                                size="large"
                             >
                                 Create Another
                             </Button>
@@ -336,6 +597,30 @@ const TeacherMockTest = () => {
                     </CardContent>
                 </Card>
             )}
+
+            {/* Save Paper Dialog */}
+            <Dialog open={saveDialogOpen} onClose={() => setSaveDialogOpen(false)} maxWidth="sm" fullWidth>
+                <DialogTitle>Save Exam Paper</DialogTitle>
+                <DialogContent>
+                    <TextField
+                        autoFocus
+                        margin="dense"
+                        label="Paper Title"
+                        fullWidth
+                        variant="outlined"
+                        value={savedPaperTitle}
+                        onChange={(e) => setSavedPaperTitle(e.target.value)}
+                        placeholder="Enter a descriptive title for this paper"
+                        sx={{ mt: 2 }}
+                    />
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setSaveDialogOpen(false)}>Cancel</Button>
+                    <Button onClick={handleSavePaper} variant="contained">
+                        Save Paper
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </Box>
     );
 };
