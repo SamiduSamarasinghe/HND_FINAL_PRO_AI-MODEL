@@ -325,7 +325,7 @@ const StudentDashboard = () => {
                                                 borderColor: 'primary.main'
                                             }
                                         }}
-                                        onClick={() => navigate('/upload-papers')}
+                                        onClick={() => navigate('')}
                                     >
                                         Upload New Paper
                                     </Button>
@@ -366,7 +366,7 @@ const StudentDashboard = () => {
                                             }
                                         }}
                                     >
-                                        View Analytics
+                                        View Assignment
                                     </Button>
                                 </Stack>
                             </CardContent>

@@ -429,7 +429,7 @@ async def remove_student_from_class(class_id: str, student_id: str, current_user
         raise HTTPException(status_code=500, detail=f"Failed to remove student: {str(e)}")
 
 @router.post("/teacher/assignments")
-async def create_assigment(assignment_data: dict, current_user: str = Depends(get_current_user)):
+async def create_assignment(assignment_data: dict, current_user: str = Depends(get_current_user)):
     """Create new assignment for a class"""
     try:
         print(f"Creating assignment for teacher: {current_user}")
@@ -444,10 +444,14 @@ async def create_assigment(assignment_data: dict, current_user: str = Depends(ge
             "content": assignment_data.get("content", ""),
             "type": assignment_data.get("type", "text"),
             "pdfUrl": assignment_data.get("pdfUrl", ""),
+            "pdfFile": assignment_data.get("pdfFile", ""),  # Add this line
+            "questions": assignment_data.get("questions", []),  # Ensure questions are saved
             "dueDate": assignment_data.get("dueDate"),
             "created": datetime.now().isoformat(),
             "teacherId": current_user
         }
+
+        print(f"📝 Saving assignment to Firebase: {assignment_doc}")  # Debug log
 
         assignment_ref.set(assignment_doc)
         print(f"Assignment created successfully: {assignment_ref.id}")
@@ -463,7 +467,7 @@ async def create_assigment(assignment_data: dict, current_user: str = Depends(ge
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Failed to create assignment: {str(e)}")
 
-@router.get("/teacher/assignments/{class_id")
+@router.get("/teacher/assignments/{class_id}")
 async def get_class_assignments(class_id: str, current_user: str = Depends(get_current_user)):
     """
     Get all assignments for a specific class
