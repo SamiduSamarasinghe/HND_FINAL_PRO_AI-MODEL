@@ -34,13 +34,20 @@ export const AuthProvider = ({ children }) => {
                     const userDoc = await getDoc(doc(db, 'users', user.uid));
                     if (userDoc.exists()) {
                         setUserProfile(userDoc.data());
+                    } else {
+                        //Create basic profile if doesn't exist
+                        setUserProfile({
+                            email: user.email,
+                            role: '',
+                            profileCompleted: false
+                        });
                     }
                 } catch (error) {
                     console.error('Error fetching user profile:', error);
                 }
             } else {
                 setUser(null);
-                    setUserProfile(null);
+                setUserProfile(null);
             }
             setLoading(false);
         });
@@ -72,12 +79,26 @@ export const AuthProvider = ({ children }) => {
         return false;
     };
 
+    const refreshUserProfile = async () => {
+        if (user) {
+            try {
+                const userDoc = await getDoc(doc(db, 'users', user.uid));
+                if (userDoc.exists()) {
+                    setUserProfile(userDoc.data());
+                }
+            } catch (error) {
+                    console.error('Error refreshing user profile:', error);
+            }
+        }
+    };
+
     const value = {
         user,
         userProfile,
         loading,
         logout,
         resendEmailVerification,
+        refreshUserProfile,
         isAuthenticated: !!user,
         isEmailVerified: user ? user.emailVerified : false
     };
