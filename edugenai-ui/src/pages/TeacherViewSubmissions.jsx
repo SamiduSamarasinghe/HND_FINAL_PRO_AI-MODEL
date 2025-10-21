@@ -76,7 +76,7 @@ const TeacherViewSubmissions = () => {
             const allAssignments = [];
 
             for (const classItem of classesList) {
-                const response = await fetch(http://localhost:8088/api/v1/teacher/assignments/${classItem.id});
+                const response = await fetch(`http://localhost:8088/api/v1/teacher/assignments/${classItem.id}`);
                 if (response.ok) {
                     const data = await response.json();
                     const assignmentsWithClass = (data.assignments || []).map(assignment => ({
@@ -97,7 +97,7 @@ const TeacherViewSubmissions = () => {
     const fetchSubmissions = async (assignmentId) => {
         try {
             setLoading(true);
-            const response = await fetch(http://localhost:8088/api/v1/teacher/submissions/${assignmentId});
+            const response = await fetch(`http://localhost:8088/api/v1/teacher/submissions/${assignmentId}`);
             if (response.ok) {
                 const data = await response.json();
                 setSubmissions(data.submissions || []);
@@ -117,7 +117,7 @@ const TeacherViewSubmissions = () => {
     const downloadSubmission = async (submission) => {
         try {
             console.log('📥 Downloading submission:', submission.id);
-            const response = await fetch(http://localhost:8088/api/v1/teacher/download-pdf/${submission.id});
+            const response = await fetch(`http://localhost:8088/api/v1/teacher/download-pdf/${submission.id}`);
             if (response.ok) {
                 const data = await response.json();
 
@@ -131,7 +131,7 @@ const TeacherViewSubmissions = () => {
                 const url = window.URL.createObjectURL(blob);
                 const link = document.createElement('a');
                 link.href = url;
-                link.download = data.file_name || submission_${submission.studentName}.pdf;
+                link.download = data.file_name || `submission_${submission.studentName}.pdf`;
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
@@ -236,7 +236,7 @@ const TeacherViewSubmissions = () => {
                                         <Typography variant="subtitle1" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
                                             <ClassIcon sx={{ mr: 1, fontSize: 20 }} />
                                             {classItem.name} - {classItem.subject}
-                                            <Chip label={${classAssignments.length} assignments} size="small" sx={{ ml: 2 }} />
+                                            <Chip label={`${classAssignments.length} assignments`} size="small" sx={{ ml: 2 }} />
                                         </Typography>
 
                                         {classAssignments.length === 0 ? (
