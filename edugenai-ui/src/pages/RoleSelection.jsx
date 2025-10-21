@@ -1,23 +1,82 @@
-import React from 'react';
-import { Box, Button, Typography, Container, useTheme } from '@mui/material';
+import React, {useEffect, useState} from 'react';
+import { Box, Button, Typography, Container, useTheme, CirularProgress } from '@mui/material';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
 import SchoolIcon from "@mui/icons-material/SchoolRounded";
 import { useNavigate } from 'react-router-dom';
+import { getAuth } from 'firebase/auth';
+import { getFirestore, doc, setDoc, getDoc } from 'firebase/firestore';
 import backgroundImage from '../assets/pngtree-d-render-of-student-workspace-with-laptop-and-stationery-on-wooden-picture-image_5828445.jpg';
 
 const RoleSelection = () => {
     const theme = useTheme();
     const navigate = useNavigate();
-    // Add this hook
+    const [loading, setLoading] = useState(false);
+    const [user, setUser] = useState(null);
+    const auth = getAuth();
+    const db = getFirestore();
+
+    useEffect(() => {
+        const currentUser = auth.currentUser;
+        if (!currentUser) {
+            navigate('/login');
+            return;
+        }
+        setUser(currentUser);
+    }, [navigate, auth]);
+
+    const handleRoleSelection = async (role) => {
+        setLoading(true);
+        try{
+            //Update user roe in firestore
+            await setDoc(doc(db, 'users', user.uid), {
+                role: role,
+                profileCompleted: true,
+                roleSelectedAt: new Date()
+            }, {merge: true});
+
+            const roleCollection = role === 'student' ? 'students' : 'teachers';
+            const roleDocRef = doc(db, roleCollection, user.uid);
+            const roleDoc = await getDoc(roleDocRef);
+
+            if (!roleDoc.exists()) {
+                await setDoc(roleDocRef, {
+                    userId: user.uid,
+                    email: user.email,
+                    createdAt: new Date(),
+                    ...(role === 'student' ? {
+                        mockTests:  [],
+                        submissions: [],
+                        progress: {},
+                        preferences: {}
+
+                    } : {
+                        calsses: [],
+                        assignments: [],
+                        createdTests: [],
+                        analytics: {}
+                    })
+                });
+            }
+            //Navigate to respective dashboard
+            navigate(`/${role}`);
+        } catch (error) {
+            console.error('Error setting user role:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     // Add click handlers
-    const handleStudentClick = () => {
-        navigate('/student');
-    };
+    const handleStudentClick = () => handleRoleSelection('student');
+    const handleTeacherClick = () => handleRoleSelection('teacher');
 
-    const handleTeacherClick = () => {
-        navigate('/teacher');
-    };
+    if (!user) {
+        return (
+            <Box sx={{display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh'}}>
+                <CirularProgress />
+            </Box>
+        );
+    }
 
     return (
         <Box sx={{
@@ -27,7 +86,6 @@ const RoleSelection = () => {
             justifyContent: 'center',
             bgcolor: '#f8f9fa',
             p: 2,
-
             backgroundImage: `url(${backgroundImage})`,
             backgroundSize: 'cover',
             backgroundPosition: 'center',
@@ -121,7 +179,8 @@ const RoleSelection = () => {
                         <Button
                             variant="outlined"
                             fullWidth
-                            onClick={handleStudentClick} // Add this line
+                            onClick={handleStudentClick}
+                            disabled={loading}
                             sx={{
                                 border: '2px solid gray',
                                 color: 'black',
@@ -134,7 +193,7 @@ const RoleSelection = () => {
                                 }
                             }}
                         >
-                            CONTINUE AS STUDENT
+                            {loading ? <CirularProgress size={24} /> : 'CONTINUE AS STUDENT'}
                         </Button>
                     </Box>
 
@@ -184,7 +243,8 @@ const RoleSelection = () => {
                         <Button
                             variant="outlined"
                             fullWidth
-                            onClick={handleTeacherClick} // Add this line
+                            onClick={handleTeacherClick}
+                            disabled={loading}
                             sx={{
                                 border: '2px solid gray',
                                 color: 'black',
@@ -197,7 +257,7 @@ const RoleSelection = () => {
                                 }
                             }}
                         >
-                            CONTINUE AS TEACHER
+                            {loading ? <CirularProgress size={24} /> : 'CONTINUE AS TEACHER'}
                         </Button>
 
                     </Box>
@@ -211,8 +271,12 @@ const RoleSelection = () => {
                     alignItems: 'center',
                     color: theme.palette.text.secondary
                 }}>
-                    <Typography variant="body1" sx={{ fontWeight: 'medium' }}>21:38</Typography>
-                    <Typography variant="body1" sx={{ fontWeight: 'medium' }}>05/08/2025</Typography>
+                    <Typography variant="body1" sx={{fontWeight: 'medium'}}>
+                        {new Date().toLocaleTimeString()}
+                    </Typography>
+                    <Typography variant="body1" sx={{fontWeight: 'medium'}}>
+                        {new Date().toLocaleDateString()}
+                    </Typography>
                 </Box>
             </Container>
         </Box>
