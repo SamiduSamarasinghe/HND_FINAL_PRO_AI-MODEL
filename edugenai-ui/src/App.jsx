@@ -10,8 +10,10 @@ import TeacherQuestionBank from './pages/TeacherQuestionBank';
 import TeacherUploadQuestions from './pages/TeacherUploadQuestions';
 import TeacherManageClasses from './pages/TeacherManageClasses';
 import QuestionBank from "./pages/QuestionBank.jsx";
-import TeacherUploadPapers from "./pages/TeacherUploadPapers.jsx"
+import TeacherUploadPapers from "./pages/TeacherUploadPapers.jsx";
 import AnalyticsPage from './pages/analytics.jsx';
+import StudentAssignments from './pages/StudentAssignments.jsx';
+import TeacherViewSubmissions from './pages/TeacherViewSubmissions.jsx'
 
 function App() {
     return (
@@ -25,6 +27,8 @@ function App() {
                 <Route path="/question-bank" element={<QuestionBank/>} />
                 <Route path="/generate-test" element={<MockTest />} />
                 <Route path="/analytics" element={<AnalyticsPage/>}/>
+                <Route path="/student/assignments" element={<StudentAssignments />} />
+
 
 
                 <Route path="/teacher" element={<TeacherDashboard />} />
@@ -33,6 +37,8 @@ function App() {
                 <Route path="upload-questions" element={<TeacherUploadQuestions />} />
                 <Route path="manage-classes" element={<TeacherManageClasses />} />
                 <Route path="/teacher/upload-papers" element={<TeacherUploadPapers />} />
+                <Route path="/teacher/submissions" element={<TeacherViewSubmissions />} />
+
 
             </Routes>
         </BrowserRouter>

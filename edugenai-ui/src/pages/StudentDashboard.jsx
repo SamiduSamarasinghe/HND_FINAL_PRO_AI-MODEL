@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, {useEffect, useState} from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Box,
@@ -37,6 +37,25 @@ const StudentDashboard = () => {
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const [activeTab, setActiveTab] = useState('recentPapers');
     const navigate = useNavigate();
+    const [notificationCount, setNotificationCount] = useState(0);
+
+    useEffect(() => {
+        fetchNotificationCount();
+    }, []);
+
+    const fetchNotificationCount = async () => {
+        try {
+            const studentEmail = "student@example.com"; // Replace with actual email
+            const response = await fetch(`http://localhost:8088/api/v1/student/notifications/${studentEmail}`);
+
+            if (response.ok) {
+                const data = await response.json();
+                setNotificationCount(data.unread_count);
+            }
+        } catch (err) {
+            console.error('Error fetching notifications:', err);
+        }
+    };
 
     const studentData = {
         name: "Sarah",
@@ -353,12 +372,14 @@ const StudentDashboard = () => {
                                         variant="outlined"
                                         fullWidth
                                         startIcon={<ViewIcon />}
+                                        onClick={() => navigate('/student/assignments')}
                                         sx={{
                                             py: 1.5,
                                             borderRadius: 2,
                                             border: '1px solid #e0e0e0',
                                             justifyContent: 'flex-start',
                                             textTransform: 'none',
+                                            position: 'relative',
                                             '&:hover': {
                                                 bgcolor: 'primary.main',
                                                 color: 'white',
@@ -367,6 +388,27 @@ const StudentDashboard = () => {
                                         }}
                                     >
                                         View Assignment
+                                        {notificationCount > 0 && (
+                                            <Box
+                                                sx={{
+                                                    position: 'absolute',
+                                                    top: 8,
+                                                    right: 8,
+                                                    bgcolor: 'error.main',
+                                                    color: 'white',
+                                                    borderRadius: '50%',
+                                                    width: 20,
+                                                    height: 20,
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    fontSize: '0.75rem',
+                                                    fontWeight: 'bold'
+                                                }}
+                                            >
+                                                {notificationCount}
+                                            </Box>
+                                        )}
                                     </Button>
                                 </Stack>
                             </CardContent>

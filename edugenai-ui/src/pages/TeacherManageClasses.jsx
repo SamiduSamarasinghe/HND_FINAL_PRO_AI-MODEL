@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
     Box,
     Typography,
@@ -38,6 +39,7 @@ import {
 } from '@mui/material';
 import {
     Groups as ClassIcon,
+    Assignment as AssignmentIcon,
     Assignment as ExamIcon,
     Add as AddIcon,
     Delete as DeleteIcon,
@@ -55,6 +57,7 @@ import {
 import QuestionBankSelection from './QuestionBankSelection';
 
 const TeacherManageClasses = () => {
+    const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState('classes');
     const [openDialog, setOpenDialog] = useState(false);
     const [openStudentDialog, setOpenStudentDialog] = useState(false);
@@ -502,6 +505,28 @@ const TeacherManageClasses = () => {
                         {viewClassDetails.name} - Class Details
                     </Typography>
                 </Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                    <Typography variant="h6">
+                        Assignments ({classAssignments.length})
+                    </Typography>
+                    <Stack direction="row" spacing={1}>
+                        <Button
+                            variant="outlined"
+                            startIcon={<AddIcon />}
+                            onClick={() => openCreateAssignmentDialog(viewClassDetails)}
+                        >
+                            Create Assignment
+                        </Button>
+                        {/* Add this button */}
+                        <Button
+                            variant="contained"
+                            startIcon={<AssignmentIcon />}
+                            onClick={() => navigate('/teacher/submissions')}
+                        >
+                            View All Submissions
+                        </Button>
+                    </Stack>
+                </Box>
 
                 {/* Class Information */}
                 <Card sx={{ mb: 3 }}>
@@ -686,6 +711,15 @@ const TeacherManageClasses = () => {
                         disabled={loading}
                     >
                         New Class
+                    </Button>
+                    {/* ADD THIS BUTTON */}
+                    <Button
+                        variant="outlined"
+                        startIcon={<AssignmentIcon />}
+                        onClick={() => navigate('/teacher/submissions')}
+                        disabled={loading}
+                    >
+                        View Submissions
                     </Button>
                 </Stack>
             </Paper>

@@ -398,37 +398,6 @@ const TeacherDashboard = () => {
                             </CardContent>
                         </Card>
 
-                        {/* Upcoming Tasks */}
-                        <Card sx={{
-                            mb: 3,
-                            borderRadius: 3,
-                            border: '1px solid #e0e0e0',
-                            '&:hover': { boxShadow: 1 }
-                        }}>
-                            <CardContent>
-                                <Typography variant="h6" gutterBottom sx={{ mb: 3 }}>
-                                    Upcoming Tasks
-                                </Typography>
-                                <Stack spacing={2}>
-                                    {teacherData.upcomingTasks.map((task, index) => (
-                                        <Card
-                                            key={index}
-                                            variant="outlined"
-                                            sx={{
-                                                borderRadius: 3,
-                                                border: '1px solid #e0e0e0',
-                                                '&:hover': { bgcolor: 'action.hover' }
-                                            }}
-                                        >
-                                            <CardContent sx={{ display: 'flex', alignItems: 'center' }}>
-                                                <PendingIcon sx={{ mr: 1, color: 'warning.main' }} />
-                                                <Typography>{task}</Typography>
-                                            </CardContent>
-                                        </Card>
-                                    ))}
-                                </Stack>
-                            </CardContent>
-                        </Card>
 
                         {/* AI Assistant */}
                         <Card sx={{

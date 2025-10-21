@@ -22,11 +22,11 @@ class FirebaseConnector:
                     firebase_admin.initialize_app(cred)
 
                 self.db = firestore.client()
-                print("Firestore initializing successful")
+                print("✅ Firestore initialized successfully")
 
             except Exception as error:
-                print("Error initializing Firestore:", error)
-                self.db = None 
+                print("❌ Error initializing Firestore:", error)
+                self.db = None
 
     def get_connection(self):
         if self.db is None:
