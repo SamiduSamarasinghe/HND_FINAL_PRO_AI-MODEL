@@ -11,17 +11,25 @@ import {
     CssBaseline,
     Divider,
     Stack,
-    Alert
+    Alert,
+    CircularProgress
 } from '@mui/material';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import GoogleIcon from '@mui/icons-material/Google';
-import FacebookIcon from '@mui/icons-material/Facebook';
 import { createTheme, ThemeProvider } from '@mui/material/styles';
 import { initializeApp } from 'firebase/app';
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from 'firebase/auth';
-import { getFirestore, doc, setDoc, updateDoc } from 'firebase/firestore';
+import {
+    getAuth,
+    createUserWithEmailAndPassword,
+    signInWithEmailAndPassword,
+    sendEmailVerification,
+    signInWithPopup,
+    GoogleAuthProvider,
+    sendPasswordResetEmail
+} from 'firebase/auth';
+import { getFirestore, doc, setDoc, getDoc } from 'firebase/firestore';
 
-// Your Firebase config
+//Firebase config
 const firebaseConfig = {
   apiKey: "AIzaSyAMkknTE3aOMvP6s7daOSRkZMDIeT7ysqQ",
   authDomain: "edugenai-3a8e0.firebaseapp.com",
@@ -35,6 +43,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+const googleProvider = new GoogleAuthProvider();
 
 const defaultTheme = createTheme();
 
@@ -45,13 +54,16 @@ const Login = () => {
     const [confirmPassword, setConfirmPassword] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    const [successMessage, setSuccessMessage] = useState('');
     const navigate = useNavigate();
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
+        setSuccessMessage('');
         setLoading(true);
 
+        //Validation
         if (!isLogin && password !== confirmPassword) {
             setError("Passwords don't match!");
             setLoading(false);
@@ -70,14 +82,16 @@ const Login = () => {
                 const userCredential = await signInWithEmailAndPassword(auth, email, password);
                 const user = userCredential.user;
 
-                // Update last login timestamp in Firestore
-                try {
-                    await updateDoc(doc(db, 'user-data', user.uid), {
-                        lastLogin: new Date()
-                    });
-                } catch (firestoreError) {
-                    console.log('User document might not exist yet, continuing with login...');
+                //Check if email is verified
+                if (!user.emailVerified) {
+                    setError('Please verify your email address before logging in. Check your inbox for the verification link.');
+                    await auth.signOut();
+                    setLoading(false);
+                    return;
                 }
+
+                // Update last login timestamp in Firestore
+                await updateUserData(user.uid, {lastLogin: new Date()});
 
                 console.log('User logged in successfully:', user);
                 navigate('/select-role');
@@ -86,62 +100,49 @@ const Login = () => {
                 const userCredential = await createUserWithEmailAndPassword(auth, email, password);
                 const user = userCredential.user;
 
-                // Store user data in Firestore 'user-data' collection
-                await setDoc(doc(db, 'user-data', user.uid), {
-                    email: email,
-                    createdAt: new Date(),
-                    uid: user.uid,
-                    role: '',
-                    profileCompleted: false,
-                    lastLogin: new Date()
-                });
+                //Send email verification
+                await sendEmailVerification(user);
 
-                console.log('User registered and data saved to Firestore');
-                navigate('/select-role');
+                //Create user profile in firebase
+                await createUserProfile(user.uid, email);
+
+                setSuccessMessage('Registration successful! Please check your email for verification link before logging in.');
+                setIsLogin(true); //Switch to log in mode
+                setEmail('');
+                setPassword('');
+                setConfirmPassword('');
             }
         } catch (error) {
             console.error('Authentication error:', error);
-            let errorMessage = 'An error occurred during authentication';
-            
-            switch (error.code) {
-                case 'auth/email-already-in-use':
-                    errorMessage = 'This email is already registered. Please login instead.';
-                    break;
-                case 'auth/invalid-email':
-                    errorMessage = 'Invalid email address.';
-                    break;
-                case 'auth/weak-password':
-                    errorMessage = 'Password is too weak. Please use a stronger password.';
-                    break;
-                case 'auth/user-not-found':
-                    errorMessage = 'No account found with this email. Please sign up first.';
-                    break;
-                case 'auth/wrong-password':
-                    errorMessage = 'Incorrect password. Please try again.';
-                    break;
-                case 'auth/too-many-requests':
-                    errorMessage = 'Too many failed attempts. Please try again later.';
-                    break;
-                case 'auth/network-request-failed':
-                    errorMessage = 'Network error. Please check your connection.';
-                    break;
-                case 'auth/user-disabled':
-                    errorMessage = 'This account has been disabled. Please contact support.';
-                    break;
-                default:
-                    errorMessage = error.message;
-            }
-            
-            setError(errorMessage);
+            handleAuthError(error);
         } finally {
             setLoading(false);
         }
     };
 
-    const handleSocialLogin = (provider) => {
-        console.log(`Social login with ${provider}`);
-        // For now, just navigate to select-role
-        navigate('/select-role');
+    const handleGoogleLogin = async () => {
+        setError('');
+        setLoading(true);
+
+        try {
+            const result = await signInWithPopup(auth, googleProvider);
+            const user = result.user;
+
+            //Check if user exists in firestore, if not create profile
+            const userDoc = await getDoc(doc(db, 'users', user.uid));
+            if (!userDoc.exists()) {
+                await createUserProfile(user.uid, user.email);
+            } else {
+                await updateUserData(user.uid, {lastLogin: new Date()});
+            }
+            navigate('/select-role');
+
+        }catch (error){
+            console.error('Google login error:', error);
+            handleAuthError(error);
+        } finally {
+            setLoading(false);
+        }
     };
 
     const handleForgotPassword = async () => {
@@ -151,15 +152,79 @@ const Login = () => {
         }
 
         try {
-            // Firebase will send a password reset email
-            // You'll need to import and use sendPasswordResetEmail
-            // import { sendPasswordResetEmail } from 'firebase/auth';
-            // await sendPasswordResetEmail(auth, email);
-            
-            alert(`Password reset email would be sent to: ${email}\n\n(Password reset functionality needs to be implemented)`);
+            await sendPasswordResetEmail(auth, email);
         } catch (error) {
             setError('Error sending password reset email: ' + error.message);
         }
+    };
+
+    const createUserProfile = async (userId, email) => {
+        const userData = {
+            email: email,
+            createdAt: new Date(),
+            uid: userId,
+            role: '',
+            profileCompleted: false,
+            lastLogin: new Date(),
+            emailVerified: false
+        };
+        await setDoc(doc(db, 'users', userId), userData);
+        console.log('User profile created in Firestore');
+    };
+
+    const updateUserData = async (userId, data) => {
+        try {
+            const userRef = doc(db, 'users', userId);
+            await setDoc(userRef, data, {merge: true});
+        } catch (error) {
+            console.error('Error updating user data:', error);
+        }
+    };
+
+    const handleAuthError = (error) => {
+        let errorMessage = 'An error occurred during authentication';
+
+        switch (error.code) {
+            case 'auth/email-already-in-use':
+                errorMessage = 'This email is already registered. Please login instead.';
+                break;
+
+            case 'auth/invalid-email':
+                errorMessage = 'Invalid email address.';
+                break;
+
+            case 'auth/weak-password':
+                errorMessage = 'Password is too weak. please use a stronger password.';
+                break;
+
+            case 'auth/user-not-found':
+                errorMessage = 'No account found with this email. Please sign uo first.';
+                break;
+
+            case 'auth/wrong-password':
+                errorMessage = 'Incorrect password. Please try again.';
+                break;
+
+            case 'auth/too-many-request':
+                errorMessage = 'Too many failed attempts. Please try again later.';
+                break;
+
+            case 'auth/network-request-failed':
+                errorMessage = 'Network error. Please check your connection.';
+                break;
+
+            case 'auth/user-disabled':
+                errorMessage = 'This account has been disabled. Please contact support.';
+                break;
+
+            case 'auth/requires-recent-login':
+                errorMessage = 'Please log in again to perform this action.';
+                break;
+
+            default:
+                errorMessage = error.message;
+        }
+        setError(errorMessage);
     };
 
     return (
@@ -184,6 +249,11 @@ const Login = () => {
                     {error && (
                         <Alert severity="error" sx={{ width: '100%', mt: 2 }}>
                             {error}
+                        </Alert>
+                    )}
+                    {successMessage && (
+                        <Alert severity="success" sx={{width: '100%', mt: 2}}>
+                            {successMessage}
                         </Alert>
                     )}
                     
@@ -248,26 +318,16 @@ const Login = () => {
                             sx={{ mt: 3, mb: 2 }}
                             disabled={loading}
                         >
-                            {loading ? 'Please wait...' : (isLogin ? 'Login' : 'Sign Up')}
+                            {loading ? <CircularProgress size={24} /> : (isLogin ? 'Login' : 'Sign Up')}
                         </Button>
                         <Divider sx={{ my: 2 }}>Or</Divider>
                         <Stack spacing={2}>
                             <Button
                                 fullWidth
                                 variant="outlined"
-                                startIcon={<FacebookIcon />}
-                                sx={{ textTransform: 'none' }}
-                                onClick={() => handleSocialLogin('facebook')}
-                                disabled={loading}
-                            >
-                                {isLogin ? 'Login with Facebook' : 'Sign up with Facebook'}
-                            </Button>
-                            <Button
-                                fullWidth
-                                variant="outlined"
                                 startIcon={<GoogleIcon />}
                                 sx={{ textTransform: 'none' }}
-                                onClick={() => handleSocialLogin('google')}
+                                onClick={handleGoogleLogin}
                                 disabled={loading}
                             >
                                 {isLogin ? 'Login with Google' : 'Sign up with Google'}
@@ -281,6 +341,7 @@ const Login = () => {
                                     e.preventDefault();
                                     setIsLogin(!isLogin);
                                     setError('');
+                                    setSuccessMessage('');
                                 }}
                                 sx={{ cursor: 'pointer' }}
                             >
@@ -293,7 +354,7 @@ const Login = () => {
                     <Typography variant="body2" color="text.secondary" align="center">
                         {'© '}
                         <Link color="inherit" href="#">
-                            ExamPrep AI
+                            EduGen AI
                         </Link>{' '}
                         {new Date().getFullYear()}
                     </Typography>
