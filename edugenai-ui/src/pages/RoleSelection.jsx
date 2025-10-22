@@ -73,7 +73,7 @@ const RoleSelection = () => {
     if (!user) {
         return (
             <Box sx={{display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh'}}>
-                <CirularProgress />
+                <CircularProgress />
             </Box>
         );
     }
@@ -193,7 +193,7 @@ const RoleSelection = () => {
                                 }
                             }}
                         >
-                            {loading ? <CirularProgress size={24} /> : 'CONTINUE AS STUDENT'}
+                            {loading ? <CircularProgress size={24} /> : 'CONTINUE AS STUDENT'}
                         </Button>
                     </Box>
 
@@ -257,7 +257,7 @@ const RoleSelection = () => {
                                 }
                             }}
                         >
-                            {loading ? <CirularProgress size={24} /> : 'CONTINUE AS TEACHER'}
+                            {loading ? <CircularProgress size={24} /> : 'CONTINUE AS TEACHER'}
                         </Button>
 
                     </Box>
