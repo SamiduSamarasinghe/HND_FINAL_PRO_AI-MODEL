@@ -34,16 +34,27 @@ import {
     Upload as UploadIcon,
     Create as GenerateIcon,
     Visibility as ViewIcon,
-    InsertDriveFileOutlined
+    InsertDriveFileOutlined,
+    Logout as LogoutIcon
 } from '@mui/icons-material';
 
 const StudentDashboard = () => {
-    const { user, userProfile, loading: authLoading } = useAuth();
+    const { user, userProfile, loading: authLoading, logout } = useAuth();
     const navigate = useNavigate();
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const [activeTab, setActiveTab] = useState('recentPapers');
     const [notificationCount, setNotificationCount] = useState(0);
     const [studentData, setStudentData] = useState(null);
+
+    //Logout handler
+    const handleLogout = async () => {
+        try {
+            await logout();
+            navigate('/login');
+        } catch (error) {
+            console.error('Logout failed:', error);
+        }
+    };
 
     // Check authentication and role
     useEffect(() => {
@@ -267,6 +278,17 @@ const StudentDashboard = () => {
                             <ListItemText primary={item.text} />
                         </ListItem>
                     ))}
+                    {/*Logout button*/}
+                    <ListItem
+                        button
+                        sx={{borderRadius: 1, mx: 1, my: 0.5}}
+                        onClick={handleLogout}
+                    >
+                        <ListItemIcon>
+                            <LogoutIcon />
+                        </ListItemIcon>
+                        <ListItemText primary="Logout" />
+                    </ListItem>
                 </List>
             </Box>
 

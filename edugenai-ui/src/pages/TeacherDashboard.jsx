@@ -31,7 +31,8 @@ import {
     ManageAccounts as ManageClassesIcon,
     Psychology as BrainIcon,
     Chat as AssistantIcon,
-    Assignment as TaskIcon
+    Assignment as TaskIcon,
+    Logout as LogoutIcon
 } from '@mui/icons-material';
 import { useAuth } from './AuthContext';
 
@@ -39,7 +40,17 @@ const TeacherDashboard = () => {
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const [activeTab, setActiveTab] = useState('recentPapers');
     const navigate = useNavigate();
-    const { user, userProfile, loading: authLoading } = useAuth();
+    const { user, userProfile, loading: authLoading, logout } = useAuth();
+
+    //Logout handler
+    const handleLogout = async () => {
+        try {
+            await logout();
+            navigate('/login');
+        } catch (error) {
+            console.error('Logout failed:', error);
+        }
+    };
 
     // Authentication check
     React.useEffect(() => {
@@ -151,6 +162,17 @@ const TeacherDashboard = () => {
                             <ListItemText primary={item.text} />
                         </ListItem>
                     ))}
+                    {/*Logout Button */}
+                    <ListItem
+                        button
+                        sx={{ borderRadius: 3, mx: 1, my: 0.5 }}
+                        onClick={handleLogout}
+                    >
+                        <ListItemIcon>
+                            <LogoutIcon />
+                        </ListItemIcon>
+                        <ListItemText primary="Logout" />
+                    </ListItem>
                 </List>
             </Box>
 
