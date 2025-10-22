@@ -1,9 +1,9 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Query
 from typing import List, Dict
 import traceback
 
 from firebase_admin import db
-from datetime import datetime
+from datetime import datetime, timedelta
 from app.config.firebase_connection import FirebaseConnector
 
 from app.model.test_models import TestGenerationRequest, GeneratedTest, QuestionType
@@ -260,3 +260,186 @@ async def manual_question_upload(request: dict):
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
+@router.get("/questions/count")
+async def get_total_questions_count():
+    """Get total count of alll questions in the firebase"""
+    try:
+        from app.config.firebase_connection import FirebaseConnector
+        connector = FirebaseConnector()
+        db = connector.get_connection()
+
+        #Count all questions in the quesstions collection
+        questions_ref = db.collection("questions")
+        docs = questions_ref.stream()
+
+        total_count = 0
+        for doc in docs:
+            total_count += 1
+
+        return {
+            "total_questions": total_count,
+            "message": f"Found {total_count} questions in database"
+        }
+    except Exception as e:
+        print(f"Error counting questions: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to count questions: {str(e)}")
+
+@router.get("/teacher/monthly-stats")
+async def get_teacher_monthly_stats(teacher_id: str = Query(...)):
+    """
+    Get monthly statistics of teacher
+    Returns: active class count, assignments created this month
+    """
+    try:
+        from app.config.firebase_connection import FirebaseConnector
+        connector = FirebaseConnector()
+        db = connector.get_connection()
+
+        #Get current month and year for filtering
+        current_date = datetime.now()
+        current_month = current_date.month
+        current_year = current_date.year
+
+        print(f"Getting monthly stats for teacher: {teacher_id}, month: {current_month}/{current_year}")
+
+        # 1. Count teacher's active classes (all classes for now)
+        classes_ref = db.collection("classes")
+        classes_query = classes_ref.where("teacherId", "==", teacher_id)
+        classes_docs = classes_query.stream()
+
+        active_classes_count = 0
+        class_ids = []
+
+        for doc in classes_docs:
+            active_classes_count += 1
+            class_ids.append(doc.id)
+
+        # 2. Count assignments created this month by this teacher
+        assignments_ref = db.collection("assignments")
+        assignments_query = assignments_ref.where("teacherId", "==", teacher_id)
+        assignments_docs = assignments_query.stream()
+
+        monthly_assignments_count = 0
+        total_assignments_count = 0
+
+        for doc in assignments_docs:
+            assignment_data = doc.to_dict()
+            total_assignments_count += 1
+
+            # Check if assignment was created this month
+            created_at = assignment_data.get("created", "")
+            if created_at:
+                try:
+                    # Parse the created date
+                    if 'Z' in created_at:
+                        created_date = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                    else:
+                        created_date = datetime.fromisoformat(created_at)
+
+                    # Check if same month and year
+                    if created_date.month == current_month and created_date.year == current_year:
+                        monthly_assignments_count += 1
+                except Exception as date_error:
+                    print(f"Date parsing error for assignment {doc.id}: {date_error}")
+                    # If we can't parse the date, count it as current month to be safe
+                    monthly_assignments_count += 1
+
+        return {
+            "teacher_id": teacher_id,
+            "active_classes": active_classes_count,
+            "monthly_assignments": monthly_assignments_count,
+            "total_assignments": total_assignments_count,
+            "month": f"{current_month}/{current_year}",
+            "class_ids": class_ids  # Return for potential frontend use
+        }
+
+    except Exception as e:
+        print(f"Error getting teacher monthly stats: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get teacher stats: {str(e)}")
+
+@router.get("/teacher/recent-engagement")
+async def get_teacher_recent_engagement(teacher_id: str = Query(...), days: int = Query(7)):
+    """
+    Get student engagement for teacher's classes in last N days
+    Returns: percentage of students who submitted anything in last 7 days
+    """
+    try:
+        from app.config.firebase_connection import FirebaseConnector
+        connector = FirebaseConnector()
+        db = connector.get_connection()
+
+        print(f"Getting engagement for teacher: {teacher_id}, last {days} days")
+
+        # 1. Get all classes for this teacher
+        classes_ref = db.collection("classes")
+        classes_query = classes_ref.where("teacherId", "==", teacher_id)
+        classes_docs = classes_query.stream()
+
+        total_students = 0
+        active_students = 0
+        student_emails = set()
+
+        for class_doc in classes_docs:
+            class_data = class_doc.to_dict()
+            students = class_data.get("students", [])
+
+            for student in students:
+                student_email = student.get("email")
+                if student_email:
+                    student_emails.add(student_email)
+                    total_students += 1
+
+        # 2. Check which students submitted in last 7 days
+        if total_students > 0:
+            # Calculate cutoff date (7 days ago)
+            cutoff_date = datetime.now() - timedelta(days=days)
+
+            # Check submissions for each student
+            submissions_ref = db.collection("submissions")
+            for student_email in student_emails:
+                try:
+                    # Query submissions for this student in last 7 days
+                    submissions_query = submissions_ref.where("studentEmail", "==", student_email)
+                    submissions_docs = submissions_query.stream()
+
+                    for doc in submissions_docs:
+                        submission_data = doc.to_dict()
+                        submitted_at = submission_data.get("submittedAt", "")
+
+                        if submitted_at:
+                            try:
+                                # Parse submission date
+                                if 'Z' in submitted_at:
+                                    submit_date = datetime.fromisoformat(submitted_at.replace('Z', '+00:00'))
+                                else:
+                                    submit_date = datetime.fromisoformat(submitted_at)
+
+                                # Check if within last 7 days
+                                if submit_date >= cutoff_date:
+                                    active_students += 1
+                                    break  # Student is active, move to next student
+                            except Exception as date_error:
+                                print(f"Date parsing error for submission {doc.id}: {date_error}")
+                                # If we can't parse date, count as active to be safe
+                                active_students += 1
+                                break
+                except Exception as e:
+                    print(f"Error checking submissions for {student_email}: {e}")
+                    continue
+
+        # Calculate engagement percentage
+        engagement_percentage = 0
+        if total_students > 0:
+            engagement_percentage = round((active_students / total_students) * 100)
+
+        return {
+            "teacher_id": teacher_id,
+            "total_students": total_students,
+            "active_students": active_students,
+            "engagement_percentage": engagement_percentage,
+            "period_days": days
+        }
+
+    except Exception as e:
+        print(f"Error getting teacher engagement: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get engagement data: {str(e)}")

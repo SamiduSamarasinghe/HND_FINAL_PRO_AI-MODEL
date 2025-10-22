@@ -232,15 +232,13 @@ const TeacherManageClasses = () => {
             setLoading(true);
             setError('');
 
-            const response = await fetch('http://localhost:8088/api/v1/teacher/classes', {
+            const response = await fetch(`http://localhost:8088/api/v1/teacher/classes?teacher_id=${user.uid}`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
                     ...newClass,
-                    teacher_id: user.uid,
-                    teacher_email: user.email
                 })
             });
 
@@ -268,14 +266,14 @@ const TeacherManageClasses = () => {
             setLoading(true);
             setError('');
 
-            const response = await fetch(`http://localhost:8088/api/v1/teacher/classes/${selectedClass.id}/students`, {
+            const response = await fetch(`http://localhost:8088/api/v1/teacher/classes/${selectedClass.id}/students?teacher_id=${user.uid}`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
                     ...newStudent,
-                    teacher_id: user.uid
+                    // Remove teacher_id from body
                 })
             });
 
@@ -311,13 +309,12 @@ const TeacherManageClasses = () => {
                 dueDate: newAssignment.dueDate,
                 questions: newAssignment.questions,
                 pdfFile: newAssignment.pdfFile ? newAssignment.pdfFile.name : null,
-                teacher_id: user.uid,
-                teacher_email: user.email
+                // Remove teacher_id from body
             };
 
             console.log('📤 Sending assignment data:', assignmentData);
 
-            const response = await fetch('http://localhost:8088/api/v1/teacher/assignments', {
+            const response = await fetch(`http://localhost:8088/api/v1/teacher/assignments?teacher_id=${user.uid}`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

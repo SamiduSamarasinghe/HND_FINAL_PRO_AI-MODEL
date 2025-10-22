@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from typing import List, Dict
 from datetime import datetime
 import traceback
@@ -9,12 +9,14 @@ router = APIRouter()
 connector = FirebaseConnector()
 __db = connector.get_connection()
 
-# Mock user authentication
-def get_current_user():
-    # TODO: Implement proper authentication
-    return "teacher_123"
+#get user id from query params
+async def get_current_user(request: Request):
+    """Get user id from query parameters"""
+    teacher_id = request.query_params.get("teacher_id")
+    if not teacher_id:
+        raise HTTPException(status_code=401, detail="Teacher ID required")
+    return teacher_id
 
-# Move all teacher endpoints from test_generation_controller.py to here
 
 @router.get("/teacher/classes")
 async def get_teacher_classes(current_user: str = Depends(get_current_user)):

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, {useEffect, useState} from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Box,
@@ -39,8 +39,60 @@ import { useAuth } from './AuthContext';
 const TeacherDashboard = () => {
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const [activeTab, setActiveTab] = useState('recentPapers');
+    const [dashboardData, setDashboardData] = useState(null);
+    const [loading, setLoading] = useState(true);
     const navigate = useNavigate();
-    const { user, userProfile, loading: authLoading, logout } = useAuth();
+    const { user, userProfile, loading: authLoading, logout } = useAuth()
+
+    //Fetch real dashboard data
+    useEffect(() => {
+        if (user && userProfile?.role === 'teacher') {
+            fetchDashboardData();
+        }
+    }, [user, userProfile]);
+
+    const fetchDashboardData = async () => {
+        try {
+            setLoading(true);
+            const teacherId = user?.uid || user?.email;
+
+            //Make parallel API calls
+            const [questionsRes, monthlyStatsRes, engagementRes] = await Promise.all([
+                fetch('http://localhost:8088/api/v1/questions/count'),
+                fetch(`http://localhost:8088/api/v1/teacher/monthly-stats?teacher_id=${teacherId}`),
+                fetch(`http://localhost:8088/api/v1/teacher/recent-engagement?teacher_id=${teacherId}&days=7`)
+            ]);
+
+            if (!questionsRes.ok || !monthlyStatsRes.ok || !engagementRes.ok) {
+                throw new Error('Failed to fetch dashboard data');
+            }
+            const questionsData = await questionsRes.json();
+            const monthlyStatsData = await monthlyStatsRes.json();
+            const engagementData = await engagementRes.json();
+
+            setDashboardData({
+                totalQuestions: questionsData.total_questions,
+                activeClasses: monthlyStatsData.active_classes,
+                monthlyAssignments: monthlyStatsData.monthly_assignments,
+                studentEngagement: engagementData.engagement_percentage,
+                totalStudents: engagementData.total_students,
+                activeStudents: engagementData.active_students
+            });
+        } catch (error) {
+            console.error('Error fetching dashboard data:', error);
+            // Fallback to mock data if API fails
+            setDashboardData({
+                totalQuestions: 0,
+                activeClasses: 0,
+                monthlyAssignments: 0,
+                studentEngagement: 0,
+                totalStudents: 0,
+                activeStudents: 0
+            });
+        } finally {
+            setLoading(false);
+        }
+    };
 
     //Logout handler
     const handleLogout = async () => {
@@ -68,10 +120,6 @@ const TeacherDashboard = () => {
 
     const teacherData = {
         name: user?.displayName || user?.email?.split('@')[0] || "Teacher",
-        totalStudents: 119,
-        activePapers: 15,
-        questionsCreated: 342,
-        avgClassScore: "80%",
         classes: [
             { name: "Mathematics 101", students: 32, papers: 8 },
             { name: "Physics 201", students: 28, papers: 6 },
@@ -108,8 +156,36 @@ const TeacherDashboard = () => {
         setActiveTab(newValue);
     };
 
+    // Stats cards data - using real data from API
+    const statsCards = [
+        {
+            icon: <QuestionsIcon sx={{ fontSize: 30 }} />,
+            title: "Total Questions",
+            value: dashboardData?.totalQuestions || 0,
+            description: "In database"
+        },
+        {
+            icon: <ClassIcon sx={{ fontSize: 30 }} />,
+            title: "Active Classes",
+            value: dashboardData?.activeClasses || 0,
+            description: "This month"
+        },
+        {
+            icon: <PapersIcon sx={{ fontSize: 30 }} />,
+            title: "Assignments",
+            value: dashboardData?.monthlyAssignments || 0,
+            description: "Created this month"
+        },
+        {
+            icon: <AnalyticsIcon sx={{ fontSize: 30 }} />,
+            title: "Student Engagement",
+            value: `${dashboardData?.studentEngagement || 0}%`,
+            description: "Active in 7 days"
+        }
+    ];
+
     // Show loading while checking authentication
-    if (authLoading) {
+    if (authLoading || loading) {
         return (
             <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
                 <CircularProgress />
@@ -193,18 +269,16 @@ const TeacherDashboard = () => {
 
                 {/* Stats Cards */}
                 <Grid container spacing={3} sx={{ mb: 4 }}>
-                    {[
-                        { icon: <StudentsIcon sx={{ fontSize: 30 }} />, title: "Total Students", value: teacherData.totalStudents },
-                        { icon: <PapersIcon sx={{ fontSize: 30 }} />, title: "Active Papers", value: teacherData.activePapers },
-                        { icon: <QuestionsIcon sx={{ fontSize: 30 }} />, title: "Questions Created", value: teacherData.questionsCreated },
-                        { icon: <AnalyticsIcon sx={{ fontSize: 30 }} />, title: "Avg Class Score", value: teacherData.avgClassScore }
-                    ].map((stat, index) => (
+                    {statsCards.map((stat, index) => (
                         <Grid item xs={12} sm={6} md={3} key={index}>
                             <Card sx={{ borderRadius: 3, border: '1px solid #e0e0e0' }}>
                                 <CardContent sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                     <Box>
                                         <Typography variant="h6" color="text.secondary">{stat.title}</Typography>
                                         <Typography variant="h4">{stat.value}</Typography>
+                                        <Typography variant="body2" color="text.secondary">
+                                            {stat.description}
+                                        </Typography>
                                     </Box>
                                     <Box sx={{
                                         bgcolor: 'primary.light',
