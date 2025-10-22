@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from './AuthContext';
 import {
     Box,
     Typography,
@@ -30,6 +31,7 @@ import {
 } from '@mui/icons-material';
 
 const QuestionBank = () => {
+    const { user, userProfile, loading: authLoading } = useAuth();
     const navigate = useNavigate();
     const [selectedSubject, setSelectedSubject] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
@@ -45,8 +47,24 @@ const QuestionBank = () => {
     const [error, setError] = useState('');
     const [refreshing, setRefreshing] = useState(false);
 
+    // Check authentication and role
+    useEffect(() => {
+        if (!authLoading) {
+            if (!user) {
+                navigate('/login');
+                return;
+            }
+            if (userProfile?.role !== 'student') {
+                navigate('/select-role');
+                return;
+            }
+        }
+    }, [user, userProfile, authLoading, navigate]);
+
     // Fetch all subjects and questions
     const fetchData = async () => {
+        if (!user) return;
+
         try {
             setLoading(true);
             setError('');
@@ -54,7 +72,7 @@ const QuestionBank = () => {
             console.log('Fetching data from backend...');
 
             // First, try to get subjects
-            const subjectsResponse = await fetch('http://localhost:8088/api/v1/subjects');
+            const subjectsResponse = await fetch(`http://localhost:8088/api/v1/subjects?user_id=${user.uid}`);
 
             if (!subjectsResponse.ok) {
                 throw new Error(`HTTP error! status: ${subjectsResponse.status}`);
@@ -77,7 +95,7 @@ const QuestionBank = () => {
             console.log('Available subjects:', subjectNames);
 
             // Fetch all questions
-            await fetchAllQuestions(subjectNames);
+            await fetchAllQuestions();
 
         } catch (err) {
             console.error('Error fetching data:', err);
@@ -91,7 +109,7 @@ const QuestionBank = () => {
     // Extract subjects from questions if subjects endpoint fails
     const extractSubjectsFromQuestions = async () => {
         try {
-            const questionsResponse = await fetch('http://localhost:8088/api/v1/questions');
+            const questionsResponse = await fetch(`http://localhost:8088/api/v1/questions?user_id=${user.uid}`);
             if (questionsResponse.ok) {
                 const questionsData = await questionsResponse.json();
                 const uniqueSubjects = [...new Set(questionsData.questions?.map(q => q.subject).filter(Boolean))];
@@ -104,8 +122,9 @@ const QuestionBank = () => {
     };
 
     // Fetch all questions
-    // In QuestionBank.jsx - update the fetchAllQuestions function
     const fetchAllQuestions = async () => {
+        if (!user) return;
+
         try {
             setLoading(true);
             setError('');
@@ -113,7 +132,7 @@ const QuestionBank = () => {
             console.log('Fetching data from backend...');
 
             // First, get subjects
-            const subjectsResponse = await fetch('http://localhost:8088/api/v1/subjects');
+            const subjectsResponse = await fetch(`http://localhost:8088/api/v1/subjects?user_id=${user.uid}`);
 
             if (!subjectsResponse.ok) {
                 throw new Error(`Failed to fetch subjects: ${subjectsResponse.status}`);
@@ -135,7 +154,7 @@ const QuestionBank = () => {
             // Try to get all questions directly
             let allQuestions = [];
             try {
-                const questionsResponse = await fetch('http://localhost:8088/api/v1/questions');
+                const questionsResponse = await fetch(`http://localhost:8088/api/v1/questions?user_id=${user.uid}`);
                 if (questionsResponse.ok) {
                     const questionsData = await questionsResponse.json();
                     if (questionsData.questions) {
@@ -192,8 +211,10 @@ const QuestionBank = () => {
     };
 
     useEffect(() => {
-        fetchData();
-    }, []);
+        if (user) {
+            fetchData();
+        }
+    }, [user]);
 
     useEffect(() => {
         filterQuestions();
@@ -273,6 +294,26 @@ const QuestionBank = () => {
         if (!text) return 'No question text available';
         return text.replace(/\[Question text\]/g, '').trim() || 'Question content';
     };
+
+    // Show loading while checking authentication
+    if (authLoading) {
+        return (
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', flexDirection: 'column' }}>
+                <CircularProgress size={60} />
+                <Typography variant="h6" sx={{ mt: 2 }}>
+                    Loading Question Bank...
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                    Fetching data from the server
+                </Typography>
+            </Box>
+        );
+    }
+
+    // Redirect if not student (handled by useEffect, but return null during redirect)
+    if (!user || userProfile?.role !== 'student') {
+        return null;
+    }
 
     if (loading) {
         return (

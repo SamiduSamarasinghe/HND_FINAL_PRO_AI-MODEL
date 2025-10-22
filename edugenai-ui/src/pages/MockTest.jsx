@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import { useAuth } from './AuthContext';
+import { useNavigate } from 'react-router-dom';
 import {
     Box,
     Typography,
@@ -20,11 +22,14 @@ import {
     MenuItem,
     Slider,
     FormControlLabel,
-    Alert
+    Alert,
+    CircularProgress
 } from '@mui/material';
 import { MenuBook, Psychology, ContentCopy, Download } from '@mui/icons-material';
 
 const MockTest = () => {
+    const { user, userProfile, loading: authLoading } = useAuth();
+    const navigate = useNavigate();
     const [subject, setSubject] = useState('');
     const [questionTypes, setQuestionTypes] = useState({
         MCQ: true,
@@ -38,8 +43,24 @@ const MockTest = () => {
     const [subjects, setSubjects] = useState([]);
     const [loadingSubjects, setLoadingSubjects] = useState(true);
 
+    // Check authentication and role
+    useEffect(() => {
+        if (!authLoading) {
+            if (!user) {
+                navigate('/login');
+                return;
+            }
+            if (userProfile?.role !== 'student') {
+                navigate('/select-role');
+                return;
+            }
+        }
+    }, [user, userProfile, authLoading, navigate]);
+
     // Fetch subjects from backend
     useEffect(() => {
+        if (!user) return;
+
         const fetchSubjects = async () => {
             try {
                 const response = await fetch('http://localhost:8088/api/v1/subjects');
@@ -57,9 +78,11 @@ const MockTest = () => {
         };
 
         fetchSubjects();
-    }, []);
+    }, [user]);
 
     const handleGenerate = async () => {
+        if (!user) return;
+
         setIsGenerating(true);
         setError('');
         setGeneratedTest(null);
@@ -73,7 +96,8 @@ const MockTest = () => {
                 body: JSON.stringify({
                     subject: subject,
                     question_types: questionTypes,
-                    question_count: questionCount
+                    question_count: questionCount,
+                    student_id: user.uid // Add student ID for tracking
                 })
             });
 
@@ -104,7 +128,10 @@ const MockTest = () => {
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify(generatedTest)
+                body: JSON.stringify({
+                    ...generatedTest,
+                    student_id: user.uid // Include student ID
+                })
             });
 
             if (!response.ok) {
@@ -137,6 +164,20 @@ const MockTest = () => {
         setSubject('');
         setError('');
     };
+
+    // Show loading while checking authentication
+    if (authLoading) {
+        return (
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+                <CircularProgress />
+            </Box>
+        );
+    }
+
+    // Redirect if not student (handled by useEffect, but return null during redirect)
+    if (!user || userProfile?.role !== 'student') {
+        return null;
+    }
 
     return (
         <Box sx={{ p: 3, maxWidth: 800, margin: '0 auto', textAlign: 'center' }}>
