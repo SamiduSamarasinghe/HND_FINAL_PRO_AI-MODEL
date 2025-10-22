@@ -1,5 +1,5 @@
 import React, {useEffect, useState} from 'react';
-import { Box, Button, Typography, Container, useTheme, CirularProgress } from '@mui/material';
+import { Box, Button, Typography, Container, useTheme, CircularProgress } from '@mui/material';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
 import SchoolIcon from "@mui/icons-material/SchoolRounded";
 import { useNavigate } from 'react-router-dom';
