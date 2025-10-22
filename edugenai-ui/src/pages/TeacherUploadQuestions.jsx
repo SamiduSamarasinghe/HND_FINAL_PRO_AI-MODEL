@@ -16,7 +16,8 @@ import {
     Divider,
     Grid,
     Paper,
-    IconButton
+    IconButton,
+    CircularProgress
 } from '@mui/material';
 import {
     Add as AddIcon,
@@ -25,8 +26,13 @@ import {
     Clear as ClearIcon,
     School as SchoolIcon
 } from '@mui/icons-material';
+import { useAuth } from './AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 const TeacherUploadQuestions = () => {
+    const { user, userProfile, loading: authLoading } = useAuth();
+    const navigate = useNavigate();
+
     const [questions, setQuestions] = useState([{
         id: 1,
         text: '',
@@ -40,6 +46,20 @@ const TeacherUploadQuestions = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
+
+    // Authentication check
+    React.useEffect(() => {
+        if (!authLoading) {
+            if (!user) {
+                navigate('/login');
+                return;
+            }
+            if (userProfile?.role !== 'teacher') {
+                navigate('/select-role');
+                return;
+            }
+        }
+    }, [user, userProfile, authLoading, navigate]);
 
     const questionTypes = [
         { value: 'MCQ', label: 'Multiple Choice (MCQ)', points: 2 },
@@ -83,19 +103,16 @@ const TeacherUploadQuestions = () => {
             if (q.id === id) {
                 const updated = { ...q, [field]: value };
 
-                // Auto-update points when type changes
                 if (field === 'type') {
                     const typeConfig = questionTypes.find(t => t.value === value);
                     updated.points = typeConfig ? typeConfig.points : 2;
                 }
 
-                // Reset options if changing from MCQ to other types
                 if (field === 'type' && value !== 'MCQ') {
                     updated.options = [];
                     updated.correctAnswer = '';
                 }
 
-                // Initialize options if changing to MCQ
                 if (field === 'type' && value === 'MCQ' && (!q.options || q.options.length === 0)) {
                     updated.options = ['', '', '', ''];
                     updated.correctAnswer = 'A';
@@ -139,6 +156,11 @@ const TeacherUploadQuestions = () => {
     };
 
     const uploadQuestions = async () => {
+        if (!user?.uid) {
+            setError('User not authenticated');
+            return;
+        }
+
         setError('');
         setSuccess('');
 
@@ -151,7 +173,6 @@ const TeacherUploadQuestions = () => {
         setLoading(true);
 
         try {
-            // Prepare questions for Firestore
             const questionsToUpload = questions.map(q => ({
                 text: q.text.trim(),
                 type: q.type,
@@ -162,12 +183,13 @@ const TeacherUploadQuestions = () => {
                 topic: q.topic.trim() || q.subject,
                 source: 'manual_upload',
                 source_file: 'Manual Entry',
-                created_at: new Date().toISOString()
+                created_at: new Date().toISOString(),
+                teacher_id: user.uid,
+                teacher_email: user.email
             }));
 
             console.log('Uploading questions:', questionsToUpload);
 
-            // Save to Firestore via your backend API
             const response = await fetch('http://localhost:8088/api/v1/questions/manual-upload', {
                 method: 'POST',
                 headers: {
@@ -175,7 +197,8 @@ const TeacherUploadQuestions = () => {
                 },
                 body: JSON.stringify({
                     questions: questionsToUpload,
-                    subject: questions[0].subject // Use first question's subject for batch
+                    subject: questions[0].subject,
+                    teacher_id: user.uid
                 })
             });
 
@@ -189,7 +212,6 @@ const TeacherUploadQuestions = () => {
 
             setSuccess(`Successfully uploaded ${questionsToUpload.length} questions to the question bank!`);
 
-            // Reset form after successful upload
             setQuestions([{
                 id: 1,
                 text: '',
@@ -227,6 +249,15 @@ const TeacherUploadQuestions = () => {
     const getTotalPoints = () => {
         return questions.reduce((total, q) => total + (q.points || 0), 0);
     };
+
+    // Show loading while checking authentication
+    if (authLoading) {
+        return (
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+                <CircularProgress />
+            </Box>
+        );
+    }
 
     return (
         <Box sx={{ p: 3, maxWidth: 1000, margin: '0 auto', minHeight: '100vh' }}>

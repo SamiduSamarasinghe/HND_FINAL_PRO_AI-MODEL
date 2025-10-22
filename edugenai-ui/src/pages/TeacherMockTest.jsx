@@ -26,11 +26,17 @@ import {
     DialogTitle,
     DialogContent,
     DialogActions,
-    TextField
+    TextField,
+    CircularProgress
 } from '@mui/material';
 import { MenuBook, Psychology, ContentCopy, Download, Class as ClassIcon, Save, Share } from '@mui/icons-material';
+import { useAuth } from './AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 const TeacherMockTest = () => {
+    const { user, userProfile, loading: authLoading } = useAuth();
+    const navigate = useNavigate();
+
     const [subject, setSubject] = useState('');
     const [classGroup, setClassGroup] = useState('');
     const [paperTitle, setPaperTitle] = useState('');
@@ -48,6 +54,20 @@ const TeacherMockTest = () => {
     const [saveDialogOpen, setSaveDialogOpen] = useState(false);
     const [savedPaperTitle, setSavedPaperTitle] = useState('');
 
+    // Authentication check
+    useEffect(() => {
+        if (!authLoading) {
+            if (!user) {
+                navigate('/login');
+                return;
+            }
+            if (userProfile?.role !== 'teacher') {
+                navigate('/select-role');
+                return;
+            }
+        }
+    }, [user, userProfile, authLoading, navigate]);
+
     // Teacher-specific data
     const teacherClasses = [
         { id: 'math101', name: 'Mathematics 101', students: 32 },
@@ -58,6 +78,8 @@ const TeacherMockTest = () => {
 
     // Fetch subjects from backend
     useEffect(() => {
+        if (!user?.uid) return;
+
         const fetchSubjects = async () => {
             try {
                 const response = await fetch('http://localhost:8088/api/v1/subjects');
@@ -75,9 +97,14 @@ const TeacherMockTest = () => {
         };
 
         fetchSubjects();
-    }, []);
+    }, [user]);
 
     const handleGenerate = async () => {
+        if (!user?.uid) {
+            setError('User not authenticated');
+            return;
+        }
+
         if (!subject) {
             setError('Please select a subject');
             return;
@@ -97,7 +124,8 @@ const TeacherMockTest = () => {
                     subject: subject,
                     question_types: questionTypes,
                     question_count: questionCount,
-                    class_id: classGroup
+                    class_id: classGroup,
+                    teacher_id: user.uid // Add teacher ID
                 })
             });
 
@@ -124,7 +152,7 @@ const TeacherMockTest = () => {
     };
 
     const handleDownloadPDF = async () => {
-        if (!generatedTest) return;
+        if (!generatedTest || !user?.uid) return;
 
         try {
             setIsGenerating(true);
@@ -133,7 +161,11 @@ const TeacherMockTest = () => {
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify(generatedTest)
+                body: JSON.stringify({
+                    ...generatedTest,
+                    teacher_id: user.uid,
+                    teacher_email: user.email
+                })
             });
 
             if (!response.ok) {
@@ -146,7 +178,7 @@ const TeacherMockTest = () => {
             a.style.display = 'none';
             a.href = url;
 
-            const filename = `${generatedTest.subject}_${paperTitle || 'exam'}.pdf`.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+            const filename = `${user.uid}_${generatedTest.subject}_${paperTitle || 'exam'}.pdf`.replace(/[^a-z0-9]/gi, '_').toLowerCase();
             a.download = filename;
 
             document.body.appendChild(a);
@@ -178,30 +210,27 @@ const TeacherMockTest = () => {
     };
 
     const handleSavePaper = async () => {
+        if (!user?.uid) {
+            setError('User not authenticated');
+            return;
+        }
+
         if (!savedPaperTitle.trim()) {
             setError('Please enter a title for the paper');
             return;
         }
 
         try {
-            // Here you would typically save to your backend
-            // For now, we'll simulate saving
             const paperData = {
                 ...generatedTest,
                 title: savedPaperTitle,
                 class_id: classGroup,
+                teacher_id: user.uid,
+                teacher_email: user.email,
                 saved_at: new Date().toISOString()
             };
 
-            // Simulate API call
             console.log('Saving paper:', paperData);
-
-            // In a real app, you would do:
-            // const response = await fetch('/api/v1/save-paper', {
-            //     method: 'POST',
-            //     headers: { 'Content-Type': 'application/json' },
-            //     body: JSON.stringify(paperData)
-            // });
 
             alert(`Paper "${savedPaperTitle}" saved successfully!`);
             setSaveDialogOpen(false);
@@ -230,6 +259,15 @@ const TeacherMockTest = () => {
         if (!generatedTest) return 0;
         return generatedTest.questions.filter(q => q.type === type).length;
     };
+
+    // Show loading while checking authentication
+    if (authLoading) {
+        return (
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+                <CircularProgress />
+            </Box>
+        );
+    }
 
     return (
         <Box sx={{ p: 3, maxWidth: 1200, margin: '0 auto', minHeight: '100vh' }}>

@@ -5,33 +5,46 @@ import SchoolIcon from "@mui/icons-material/SchoolRounded";
 import { useNavigate } from 'react-router-dom';
 import { getAuth } from 'firebase/auth';
 import { getFirestore, doc, setDoc, getDoc } from 'firebase/firestore';
+import { useAuth } from './AuthContext';
 import backgroundImage from '../assets/pngtree-d-render-of-student-workspace-with-laptop-and-stationery-on-wooden-picture-image_5828445.jpg';
 
 const RoleSelection = () => {
     const theme = useTheme();
     const navigate = useNavigate();
+    const { user, userProfile, refreshUserProfile } = useAuth();
     const [loading, setLoading] = useState(false);
-    const [user, setUser] = useState(null);
     const auth = getAuth();
     const db = getFirestore();
 
     useEffect(() => {
-        const currentUser = auth.currentUser;
-        if (!currentUser) {
+        // Use AuthContext instead of direct auth check
+        if (!user) {
             navigate('/login');
             return;
         }
-        setUser(currentUser);
-    }, [navigate, auth]);
+
+        // If user already has a role, redirect to appropriate dashboard
+        if (userProfile?.role) {
+            navigate(`/${userProfile.role}`);
+            return;
+        }
+    }, [user, userProfile, navigate]);
 
     const handleRoleSelection = async (role) => {
+        if (!user) {
+            navigate('/login');
+            return;
+        }
+
         setLoading(true);
-        try{
-            //Update user roe in firestore
+        try {
+            // Update user role in firestore
             await setDoc(doc(db, 'users', user.uid), {
                 role: role,
                 profileCompleted: true,
-                roleSelectedAt: new Date()
+                roleSelectedAt: new Date(),
+                email: user.email,
+                displayName: user.displayName || user.email
             }, {merge: true});
 
             const roleCollection = role === 'student' ? 'students' : 'teachers';
@@ -42,23 +55,28 @@ const RoleSelection = () => {
                 await setDoc(roleDocRef, {
                     userId: user.uid,
                     email: user.email,
+                    displayName: user.displayName || user.email,
                     createdAt: new Date(),
                     ...(role === 'student' ? {
-                        mockTests:  [],
+                        mockTests: [],
                         submissions: [],
                         progress: {},
                         preferences: {}
-
                     } : {
-                        calsses: [],
+                        classes: [],
                         assignments: [],
                         createdTests: [],
                         analytics: {}
                     })
                 });
             }
-            //Navigate to respective dashboard
+
+            // Refresh user profile in context
+            await refreshUserProfile();
+
+            // Navigate to respective dashboard
             navigate(`/${role}`);
+
         } catch (error) {
             console.error('Error setting user role:', error);
         } finally {

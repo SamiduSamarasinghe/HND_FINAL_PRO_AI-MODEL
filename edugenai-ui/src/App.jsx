@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import {ThemeProvider, createTheme} from "@mui/material/styles";
 import CssBaseline from "@mui/material/CssBaseline";
 import {AuthProvider} from "./pages/AuthContext.jsx";
@@ -37,88 +37,90 @@ function App() {
             <AuthProvider>
                 <BrowserRouter>
                     <Routes>
-                        {/*PUBLIC ROUTES*/}
-                        <Route path="/" element={<Login />} />
+                        {/* PUBLIC ROUTES */}
                         <Route path="/login" element={<Login />} />
 
-                        {/*Protected Routes - Require authentication and email verification*/}
+                        {/* DEFAULT ROUTE - Redirect based on auth state */}
+                        <Route path="/" element={<Navigate to="/login" replace />} />
+
+                        {/* PROTECTED ROUTES - Require authentication */}
                         <Route path="/select-role" element={
-                            <ProtectedRoute requireEmailVerification={true}>
+                            <ProtectedRoute requireEmailVerification={false}>
                                 <RoleSelection />
                             </ProtectedRoute>
                         } />
 
-                        {/*Student Routes - Require student role*/}
+                        {/* STUDENT ROUTES - Require student role */}
                         <Route path="/student" element={
-                            <ProtectedRoute requireEmailVerification={true}>
+                            <ProtectedRoute requiredRole="student">
                                 <StudentDashboard />
                             </ProtectedRoute>
                         } />
-                        <Route path="/upload-papers" element={
-                            <ProtectedRoute requireEmailVerification={true}>
+                        <Route path="/student/upload-papers" element={
+                            <ProtectedRoute requiredRole="student">
                                 <UploadPapers />
                             </ProtectedRoute>
                         } />
-                        <Route path="/question-bank" element={
-                            <ProtectedRoute requireEmailVerification={true}>
+                        <Route path="/student/question-bank" element={
+                            <ProtectedRoute requiredRole="student">
                                 <QuestionBank />
                             </ProtectedRoute>
                         } />
-                        <Route path="/generate-test" element={
-                            <ProtectedRoute requireEmailVerification={true}>
+                        <Route path="/student/generate-test" element={
+                            <ProtectedRoute requiredRole="student">
                                 <MockTest />
                             </ProtectedRoute>
                         } />
-                        <Route path="/analytics" element={
-                            <ProtectedRoute requireEmailVerification={true}>
+                        <Route path="/student/analytics" element={
+                            <ProtectedRoute requiredRole="student">
                                 <AnalyticsPage />
                             </ProtectedRoute>
                         } />
                         <Route path="/student/assignments" element={
-                            <ProtectedRoute requireEmailVerification={true}>
+                            <ProtectedRoute requiredRole="student">
                                 <StudentAssignments />
                             </ProtectedRoute>
                         } />
 
-                        {/*Teacher Routes - Require teacher role*/}
+                        {/* TEACHER ROUTES - Require teacher role */}
                         <Route path="/teacher" element={
-                            <ProtectedRoute requireEmailVerification={true}>
+                            <ProtectedRoute requiredRole="teacher">
                                 <TeacherDashboard />
                             </ProtectedRoute>
                         } />
                         <Route path="/teacher/create-exam" element={
-                            <ProtectedRoute requireEmailVerification={true}>
+                            <ProtectedRoute requiredRole="teacher">
                                 <TeacherMockTest />
                             </ProtectedRoute>
                         } />
                         <Route path="/teacher/question-bank" element={
-                            <ProtectedRoute requireEmailVerification={true}>
+                            <ProtectedRoute requiredRole="teacher">
                                 <TeacherQuestionBank />
                             </ProtectedRoute>
                         } />
-                        <Route path="/upload-questions" element={
-                            <ProtectedRoute requireEmailVerification={true}>
+                        <Route path="/teacher/upload-questions" element={
+                            <ProtectedRoute requiredRole="teacher">
                                 <TeacherUploadQuestions />
                             </ProtectedRoute>
                         } />
-                        <Route path="/manage-classes" element={
-                            <ProtectedRoute requireEmailVerification={true}>
+                        <Route path="/teacher/manage-classes" element={
+                            <ProtectedRoute requiredRole="teacher">
                                 <TeacherManageClasses />
                             </ProtectedRoute>
                         } />
                         <Route path="/teacher/upload-papers" element={
-                            <ProtectedRoute requireEmailVerification={true}>
+                            <ProtectedRoute requiredRole="teacher">
                                 <TeacherUploadPapers />
                             </ProtectedRoute>
                         } />
                         <Route path="/teacher/submissions" element={
-                            <ProtectedRoute requireEmailVerification={true}>
+                            <ProtectedRoute requiredRole="teacher">
                                 <TeacherViewSubmissions />
                             </ProtectedRoute>
                         } />
 
-                        {/*Fallback route*/}
-                        <Route path="*" element={<Login />} />
+                        {/* FALLBACK ROUTE */}
+                        <Route path="*" element={<Navigate to="/login" replace />} />
                     </Routes>
                 </BrowserRouter>
             </AuthProvider>

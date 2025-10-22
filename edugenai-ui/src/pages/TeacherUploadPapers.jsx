@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
     Box,
     Typography,
@@ -16,7 +16,8 @@ import {
     TextField,
     Alert,
     Grid,
-    Paper
+    Paper,
+    CircularProgress
 } from '@mui/material';
 import {
     Upload as UploadIcon,
@@ -26,16 +27,35 @@ import {
     Analytics as AnalyticsIcon,
     CheckCircle as CheckCircleIcon
 } from '@mui/icons-material';
+import { useAuth } from './AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 const TeacherUploadPapers = () => {
+    const { user, userProfile, loading: authLoading } = useAuth();
+    const navigate = useNavigate();
+
     const [file, setFile] = useState(null);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [analysisResult, setAnalysisResult] = useState(null);
     const [subject, setSubject] = useState("");
-    const [paperType, setPaperType] = useState("pastPaper"); // "pastPaper" or "lectureNotes"
+    const [paperType, setPaperType] = useState("pastPaper");
     const [openDialog, setOpenDialog] = useState(false);
     const [error, setError] = useState('');
     const [uploadHistory, setUploadHistory] = useState([]);
+
+    // Authentication check
+    useEffect(() => {
+        if (!authLoading) {
+            if (!user) {
+                navigate('/login');
+                return;
+            }
+            if (userProfile?.role !== 'teacher') {
+                navigate('/select-role');
+                return;
+            }
+        }
+    }, [user, userProfile, authLoading, navigate]);
 
     const handleFileChange = (e) => {
         const selectedFile = e.target.files[0];
@@ -60,12 +80,17 @@ const TeacherUploadPapers = () => {
 
     const handlePaperTypeSubmit = () => {
         setOpenDialog(false);
-        if (file && subject) {
+        if (file && subject && user?.uid) {
             processFile(file, subject, paperType);
         }
     };
 
     const processFile = async (file, subject, type) => {
+        if (!user?.uid) {
+            setError('User not authenticated');
+            return;
+        }
+
         setIsAnalyzing(true);
         setError('');
         setAnalysisResult(null);
@@ -74,10 +99,9 @@ const TeacherUploadPapers = () => {
             const formData = new FormData();
             formData.append('file', file);
 
-            // Determine if it's a past paper or lecture notes
             const isPaper = type === "pastPaper";
 
-            const url = `http://localhost:8088/api/v1/pdf-reader?isPaper=${isPaper}&subject=${encodeURIComponent(subject)}`;
+            const url = `http://localhost:8088/api/v1/pdf-reader?isPaper=${isPaper}&subject=${encodeURIComponent(subject)}&teacher_id=${user.uid}`;
             console.log('Uploading to:', url);
 
             const response = await fetch(url, {
@@ -99,7 +123,6 @@ const TeacherUploadPapers = () => {
             const result = await response.json();
             console.log('Upload result:', result);
 
-            // Add to upload history
             const uploadRecord = {
                 id: Date.now(),
                 filename: file.name,
@@ -107,17 +130,17 @@ const TeacherUploadPapers = () => {
                 type: type,
                 result: result,
                 timestamp: new Date().toISOString(),
-                status: 'success'
+                status: 'success',
+                teacher_id: user.uid
             };
 
-            setUploadHistory(prev => [uploadRecord, ...prev.slice(0, 4)]); // Keep last 5 records
+            setUploadHistory(prev => [uploadRecord, ...prev.slice(0, 4)]);
             setAnalysisResult(result);
 
         } catch (err) {
             setError(err.message);
             console.error('Upload error:', err);
 
-            // Add failed upload to history
             const uploadRecord = {
                 id: Date.now(),
                 filename: file.name,
@@ -125,7 +148,8 @@ const TeacherUploadPapers = () => {
                 type: paperType,
                 error: err.message,
                 timestamp: new Date().toISOString(),
-                status: 'error'
+                status: 'error',
+                teacher_id: user.uid
             };
             setUploadHistory(prev => [uploadRecord, ...prev.slice(0, 4)]);
         } finally {
@@ -165,6 +189,15 @@ const TeacherUploadPapers = () => {
     };
 
     const stats = getUploadStats();
+
+    // Show loading while checking authentication
+    if (authLoading) {
+        return (
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+                <CircularProgress />
+            </Box>
+        );
+    }
 
     return (
         <Box sx={{ p: 3, maxWidth: 1200, margin: '0 auto', minHeight: '100vh' }}>

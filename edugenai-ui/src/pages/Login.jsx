@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Box,
@@ -25,25 +25,39 @@ import {
     sendEmailVerification,
     signInWithPopup,
     GoogleAuthProvider,
-    sendPasswordResetEmail
+    sendPasswordResetEmail,
+    setPersistence,
+    browserLocalPersistence,
+    onAuthStateChanged
 } from 'firebase/auth';
 import { getFirestore, doc, setDoc, getDoc } from 'firebase/firestore';
+import { useAuth } from './AuthContext';
 
 //Firebase config
 const firebaseConfig = {
-  apiKey: "AIzaSyAMkknTE3aOMvP6s7daOSRkZMDIeT7ysqQ",
-  authDomain: "edugenai-3a8e0.firebaseapp.com",
-  projectId: "edugenai-3a8e0",
-  storageBucket: "edugenai-3a8e0.appspot.com",
-  messagingSenderId: "346092424756",
-  appId: "1:346092424756:web:ea8d4ebc59c898b42c8461"
+    apiKey: "AIzaSyAMkknTE3aOMvP6s7daOSRkZMDIeT7ysqQ",
+    authDomain: "edugenai-3a8e0.firebaseapp.com",
+    projectId: "edugenai-3a8e0",
+    storageBucket: "edugenai-3a8e0.appspot.com",
+    messagingSenderId: "346092424756",
+    appId: "1:346092424756:web:ea8d4ebc59c898b42c8461"
 };
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
+
+// Configure auth settings to fix COOP issues
+auth.settings.appVerificationDisabledForTesting = false;
+setPersistence(auth, browserLocalPersistence);
+
 const db = getFirestore(app);
 const googleProvider = new GoogleAuthProvider();
+
+// Add these for better Google Auth compatibility
+googleProvider.setCustomParameters({
+    prompt: 'select_account'
+});
 
 const defaultTheme = createTheme();
 
@@ -56,6 +70,19 @@ const Login = () => {
     const [loading, setLoading] = useState(false);
     const [successMessage, setSuccessMessage] = useState('');
     const navigate = useNavigate();
+    const { refreshUserProfile } = useAuth();
+
+    // Check if user is already logged in
+    useEffect(() => {
+        const unsubscribe = onAuthStateChanged(auth, (user) => {
+            if (user) {
+                // User is signed in, redirect to role selection
+                navigate('/select-role');
+            }
+        });
+
+        return () => unsubscribe();
+    }, [navigate]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -82,8 +109,8 @@ const Login = () => {
                 const userCredential = await signInWithEmailAndPassword(auth, email, password);
                 const user = userCredential.user;
 
-                //Check if email is verified
-                if (!user.emailVerified) {
+                //Check if email is verified (skip for Google OAuth users)
+                if (!user.emailVerified && user.providerData[0]?.providerId !== 'google.com') {
                     setError('Please verify your email address before logging in. Check your inbox for the verification link.');
                     await auth.signOut();
                     setLoading(false);
@@ -92,6 +119,9 @@ const Login = () => {
 
                 // Update last login timestamp in Firestore
                 await updateUserData(user.uid, {lastLogin: new Date()});
+
+                // Refresh user profile in context
+                await refreshUserProfile();
 
                 console.log('User logged in successfully:', user);
                 navigate('/select-role');
@@ -135,11 +165,24 @@ const Login = () => {
             } else {
                 await updateUserData(user.uid, {lastLogin: new Date()});
             }
+
+            // Refresh user profile in context
+            await refreshUserProfile();
+
+            console.log('Google login successful, navigating to role selection');
             navigate('/select-role');
 
-        }catch (error){
+        } catch (error) {
             console.error('Google login error:', error);
-            handleAuthError(error);
+
+            // Handle specific Google auth errors
+            if (error.code === 'auth/popup-blocked') {
+                setError('Popup was blocked by your browser. Please allow popups for this site.');
+            } else if (error.code === 'auth/popup-closed-by-user') {
+                setError('Google sign-in was cancelled.');
+            } else {
+                handleAuthError(error);
+            }
         } finally {
             setLoading(false);
         }
@@ -153,6 +196,7 @@ const Login = () => {
 
         try {
             await sendPasswordResetEmail(auth, email);
+            setSuccessMessage('Password reset email sent! Check your inbox.');
         } catch (error) {
             setError('Error sending password reset email: ' + error.message);
         }
@@ -198,14 +242,14 @@ const Login = () => {
                 break;
 
             case 'auth/user-not-found':
-                errorMessage = 'No account found with this email. Please sign uo first.';
+                errorMessage = 'No account found with this email. Please sign up first.';
                 break;
 
             case 'auth/wrong-password':
                 errorMessage = 'Incorrect password. Please try again.';
                 break;
 
-            case 'auth/too-many-request':
+            case 'auth/too-many-requests':
                 errorMessage = 'Too many failed attempts. Please try again later.';
                 break;
 
@@ -221,8 +265,21 @@ const Login = () => {
                 errorMessage = 'Please log in again to perform this action.';
                 break;
 
+            case 'auth/popup-blocked':
+                errorMessage = 'Popup was blocked by your browser. Please allow popups for this site.';
+                break;
+
+            case 'auth/popup-closed-by-user':
+                errorMessage = 'Sign-in was cancelled.';
+                break;
+
+            case 'auth/operation-not-supported-in-this-environment':
+            case 'auth/auth-domain-config-required':
+                errorMessage = 'Authentication configuration error. Please contact support.';
+                break;
+
             default:
-                errorMessage = error.message;
+                errorMessage = error.message || 'Authentication failed. Please try again.';
         }
         setError(errorMessage);
     };
@@ -245,7 +302,7 @@ const Login = () => {
                     <Typography component="h1" variant="h5">
                         {isLogin ? 'Login' : 'Sign Up'}
                     </Typography>
-                    
+
                     {error && (
                         <Alert severity="error" sx={{ width: '100%', mt: 2 }}>
                             {error}
@@ -256,7 +313,7 @@ const Login = () => {
                             {successMessage}
                         </Alert>
                     )}
-                    
+
                     <Box component="form" onSubmit={handleSubmit} noValidate sx={{ mt: 3, width: '100%' }}>
                         <TextField
                             margin="normal"
@@ -301,9 +358,9 @@ const Login = () => {
                         )}
                         {isLogin && (
                             <Box sx={{ display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
-                                <Link 
-                                    href="#" 
-                                    variant="body2" 
+                                <Link
+                                    href="#"
+                                    variant="body2"
                                     onClick={handleForgotPassword}
                                     sx={{ cursor: 'pointer' }}
                                 >

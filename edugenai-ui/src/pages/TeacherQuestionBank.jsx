@@ -36,9 +36,14 @@ import {
     Download as DownloadIcon,
     PictureAsPdf as PdfIcon
 } from '@mui/icons-material';
+import { useAuth } from './AuthContext';
+import { useNavigate } from 'react-router-dom';
 import backgroundImage from '../assets/pngtree-home-based-e-learning-and-online-education-in-a-3d-illustration-picture-image_7253729.jpg';
 
 const TeacherQuestionBank = () => {
+    const { user, userProfile, loading: authLoading } = useAuth();
+    const navigate = useNavigate();
+
     const [searchTerm, setSearchTerm] = useState("");
     const [filters, setFilters] = useState({
         subject: "",
@@ -55,8 +60,28 @@ const TeacherQuestionBank = () => {
     const [subjects, setSubjects] = useState([]);
     const [exportDialogOpen, setExportDialogOpen] = useState(false);
 
+    // Authentication check
+    useEffect(() => {
+        if (!authLoading) {
+            if (!user) {
+                navigate('/login');
+                return;
+            }
+            if (userProfile?.role !== 'teacher') {
+                navigate('/select-role');
+                return;
+            }
+        }
+    }, [user, userProfile, authLoading, navigate]);
+
+
     // Fetch all data
     const fetchData = async () => {
+        // Add teacher ID check for data operations
+        if (!user?.uid) {
+            setError('User not authenticated');
+            return;
+        }
         try {
             setLoading(true);
             setError('');
@@ -162,8 +187,10 @@ const TeacherQuestionBank = () => {
     };
 
     useEffect(() => {
-        fetchData();
-    }, []);
+        if (user && userProfile?.role === 'teacher') {
+            fetchData();
+        }
+    }, [user, userProfile]);
 
     useEffect(() => {
         filterQuestions();
@@ -253,6 +280,7 @@ const TeacherQuestionBank = () => {
 QUESTIONS EXPORT
 Generated on: ${new Date().toLocaleDateString()}
 Total Questions: ${selectedQuestions.length}
+Teacher: ${user?.email}
 
 ${selectedQuestionsData.map((q, index) => `
 QUESTION ${index + 1}:
@@ -273,7 +301,7 @@ ${'='.repeat(50)}
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = `questions_export_${new Date().getTime()}.txt`;
+        link.download = `questions_export_${user?.uid}_${new Date().getTime()}.txt`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -299,6 +327,16 @@ ${'='.repeat(50)}
         return 'success';
     };
 
+    // Show loading while checking authentication
+    if (authLoading) {
+        return (
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+                <CircularProgress size={60} />
+            </Box>
+        );
+    }
+
+    // Show loading for data
     if (loading) {
         return (
             <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>

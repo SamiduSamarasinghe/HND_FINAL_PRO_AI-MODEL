@@ -16,7 +16,8 @@ import {
     Paper,
     Divider,
     Button,
-    Stack
+    Stack,
+    CircularProgress
 } from '@mui/material';
 import {
     Menu as MenuIcon,
@@ -28,22 +29,34 @@ import {
     Upload as UploadIcon,
     Create as CreateIcon,
     ManageAccounts as ManageClassesIcon,
-    ManageAccounts as ManageAccountsIcon,
     Psychology as BrainIcon,
     Chat as AssistantIcon,
-    Assignment as TaskIcon,
-    CheckCircle as CompletedIcon,
-    AccessTime as PendingIcon
+    Assignment as TaskIcon
 } from '@mui/icons-material';
+import { useAuth } from './AuthContext';
 
 const TeacherDashboard = () => {
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const [activeTab, setActiveTab] = useState('recentPapers');
     const navigate = useNavigate();
+    const { user, userProfile, loading: authLoading } = useAuth();
 
+    // Authentication check
+    React.useEffect(() => {
+        if (!authLoading) {
+            if (!user) {
+                navigate('/login');
+                return;
+            }
+            if (userProfile?.role !== 'teacher') {
+                navigate('/select-role');
+                return;
+            }
+        }
+    }, [user, userProfile, authLoading, navigate]);
 
     const teacherData = {
-        name: "Dr. Martinez",
+        name: user?.displayName || user?.email?.split('@')[0] || "Teacher",
         totalStudents: 119,
         activePapers: 15,
         questionsCreated: 342,
@@ -84,6 +97,15 @@ const TeacherDashboard = () => {
         setActiveTab(newValue);
     };
 
+    // Show loading while checking authentication
+    if (authLoading) {
+        return (
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+                <CircularProgress />
+            </Box>
+        );
+    }
+
     return (
         <Box sx={{ display: 'flex', bgcolor: '#f8f9fa', minHeight: '100vh' }}>
             {/* Sidebar */}
@@ -110,15 +132,11 @@ const TeacherDashboard = () => {
                 <Divider />
                 <List>
                     {[
-                        {/* text: 'Dashboard', icon: <MenuIcon /> */},
                         { text: 'Question Bank', icon: <QuestionsIcon />, path: '/teacher/question-bank' },
                         { text: 'Create Paper', icon: <CreateIcon />, path: '/teacher/create-exam' },
                         { text: 'Upload Papers', icon: <UploadIcon />, path: '/teacher/upload-papers' },
                         { text: 'Analytics', icon: <AnalyticsIcon /> },
                         { text: 'AI Assistant', icon: <AssistantIcon /> },
-                        { /*text: 'Student Progress', icon: <ManageClassesIcon /> */},
-                        {/* text: 'Profile', icon: <ManageAccountsIcon /> },
-                        { text: 'Settings', icon: <ManageAccountsIcon /> */}
                     ].map((item, index) => (
                         <ListItem
                             button
@@ -364,12 +382,12 @@ const TeacherDashboard = () => {
                                         {
                                             icon: <UploadIcon />,
                                             text: "Upload Questions",
-                                            action: () => navigate('/upload-questions')
+                                            action: () => navigate('/teacher/upload-questions')
                                         },
                                         {
                                             icon: <ManageClassesIcon />,
                                             text: "Manage Classes",
-                                            action: () => navigate('/manage-classes')
+                                            action: () => navigate('/teacher/manage-classes')
                                         }
                                     ].map((action, index) => (
                                         <Button
@@ -397,7 +415,6 @@ const TeacherDashboard = () => {
                                 </Stack>
                             </CardContent>
                         </Card>
-
 
                         {/* AI Assistant */}
                         <Card sx={{

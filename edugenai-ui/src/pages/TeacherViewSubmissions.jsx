@@ -30,8 +30,13 @@ import {
     Schedule as ScheduleIcon,
     Groups as ClassIcon
 } from '@mui/icons-material';
+import { useAuth } from './AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 const TeacherViewSubmissions = () => {
+    const { user, userProfile, loading: authLoading } = useAuth();
+    const navigate = useNavigate();
+
     const [classes, setClasses] = useState([]);
     const [assignments, setAssignments] = useState([]);
     const [selectedAssignment, setSelectedAssignment] = useState(null);
@@ -44,19 +49,36 @@ const TeacherViewSubmissions = () => {
     const [grading, setGrading] = useState(false);
     const [error, setError] = useState('');
 
+    // Authentication check
     useEffect(() => {
-        fetchTeacherClasses();
-    }, []);
+        if (!authLoading) {
+            if (!user) {
+                navigate('/login');
+                return;
+            }
+            if (userProfile?.role !== 'teacher') {
+                navigate('/select-role');
+                return;
+            }
+        }
+    }, [user, userProfile, authLoading, navigate]);
+
+    useEffect(() => {
+        if (user && userProfile?.role === 'teacher') {
+            fetchTeacherClasses();
+        }
+    }, [user, userProfile]);
 
     const fetchTeacherClasses = async () => {
+        if (!user?.uid) return;
+
         try {
             setLoading(true);
-            const response = await fetch('http://localhost:8088/api/v1/teacher/classes');
+            const response = await fetch(`http://localhost:8088/api/v1/teacher/classes?teacher_id=${user.uid}`);
             if (response.ok) {
                 const data = await response.json();
                 setClasses(data.classes || []);
 
-                // Fetch assignments for all classes
                 if (data.classes && data.classes.length > 0) {
                     await fetchAllAssignments(data.classes);
                 }
@@ -72,11 +94,13 @@ const TeacherViewSubmissions = () => {
     };
 
     const fetchAllAssignments = async (classesList) => {
+        if (!user?.uid) return;
+
         try {
             const allAssignments = [];
 
             for (const classItem of classesList) {
-                const response = await fetch(`http://localhost:8088/api/v1/teacher/assignments/${classItem.id}`);
+                const response = await fetch(`http://localhost:8088/api/v1/teacher/assignments/${classItem.id}?teacher_id=${user.uid}`);
                 if (response.ok) {
                     const data = await response.json();
                     const assignmentsWithClass = (data.assignments || []).map(assignment => ({
@@ -95,9 +119,11 @@ const TeacherViewSubmissions = () => {
     };
 
     const fetchSubmissions = async (assignmentId) => {
+        if (!user?.uid) return;
+
         try {
             setLoading(true);
-            const response = await fetch(`http://localhost:8088/api/v1/teacher/submissions/${assignmentId}`);
+            const response = await fetch(`http://localhost:8088/api/v1/teacher/submissions/${assignmentId}?teacher_id=${user.uid}`);
             if (response.ok) {
                 const data = await response.json();
                 setSubmissions(data.submissions || []);
@@ -115,13 +141,14 @@ const TeacherViewSubmissions = () => {
     };
 
     const downloadSubmission = async (submission) => {
+        if (!user?.uid) return;
+
         try {
             console.log('📥 Downloading submission:', submission.id);
-            const response = await fetch(`http://localhost:8088/api/v1/teacher/download-pdf/${submission.id}`);
+            const response = await fetch(`http://localhost:8088/api/v1/teacher/download-pdf/${submission.id}?teacher_id=${user.uid}`);
             if (response.ok) {
                 const data = await response.json();
 
-                // Convert base64 to blob and download
                 const binaryString = atob(data.file_content);
                 const bytes = new Uint8Array(binaryString.length);
                 for (let i = 0; i < binaryString.length; i++) {
@@ -131,7 +158,7 @@ const TeacherViewSubmissions = () => {
                 const url = window.URL.createObjectURL(blob);
                 const link = document.createElement('a');
                 link.href = url;
-                link.download = data.file_name || `submission_${submission.studentName}.pdf`;
+                link.download = data.file_name || `submission_${user.uid}_${submission.studentName}.pdf`;
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
@@ -153,7 +180,7 @@ const TeacherViewSubmissions = () => {
     };
 
     const submitGrade = async () => {
-        if (!selectedSubmission || !grade) return;
+        if (!selectedSubmission || !grade || !user?.uid) return;
 
         try {
             setGrading(true);
@@ -165,13 +192,14 @@ const TeacherViewSubmissions = () => {
                 body: JSON.stringify({
                     submissionId: selectedSubmission.id,
                     grade: grade,
-                    feedback: feedback
+                    feedback: feedback,
+                    teacher_id: user.uid,
+                    teacher_email: user.email
                 })
             });
 
             if (response.ok) {
                 setGradingDialogOpen(false);
-                // Refresh submissions
                 if (selectedAssignment) {
                     await fetchSubmissions(selectedAssignment.id);
                 }
@@ -197,6 +225,15 @@ const TeacherViewSubmissions = () => {
             default: return 'Assignment';
         }
     };
+
+    // Show loading while checking authentication
+    if (authLoading) {
+        return (
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+                <CircularProgress />
+            </Box>
+        );
+    }
 
     return (
         <Box sx={{ p: 3, maxWidth: 1200, margin: '0 auto' }}>

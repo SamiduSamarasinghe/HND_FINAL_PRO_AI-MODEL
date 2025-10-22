@@ -54,10 +54,13 @@ import {
     ArrowBack as BackIcon,
     ExpandMore as ExpandMoreIcon
 } from '@mui/icons-material';
+import { useAuth } from './AuthContext';
 import QuestionBankSelection from './QuestionBankSelection';
 
 const TeacherManageClasses = () => {
     const navigate = useNavigate();
+    const { user, userProfile, loading: authLoading } = useAuth();
+
     const [activeTab, setActiveTab] = useState('classes');
     const [openDialog, setOpenDialog] = useState(false);
     const [openStudentDialog, setOpenStudentDialog] = useState(false);
@@ -91,11 +94,27 @@ const TeacherManageClasses = () => {
     });
     const [assignmentType, setAssignmentType] = useState('text');
 
+    // Authentication check
+    useEffect(() => {
+        if (!authLoading) {
+            if (!user) {
+                navigate('/login');
+                return;
+            }
+            if (userProfile?.role !== 'teacher') {
+                navigate('/select-role');
+                return;
+            }
+        }
+    }, [user, userProfile, authLoading, navigate]);
+
     // Fetch classes from backend
     const fetchClasses = async () => {
+        if (!user?.uid) return;
+
         try {
             setLoading(true);
-            const response = await fetch('http://localhost:8088/api/v1/teacher/classes');
+            const response = await fetch(`http://localhost:8088/api/v1/teacher/classes?teacher_id=${user.uid}`);
             if (!response.ok) {
                 throw new Error('Failed to fetch classes');
             }
@@ -117,6 +136,8 @@ const TeacherManageClasses = () => {
 
     // Fetch assignments for specific classes
     const fetchAssignmentsForClasses = async (classesList) => {
+        if (!user?.uid) return;
+
         try {
             console.log('Fetching assignments for classes:', classesList.map(c => ({ id: c.id, name: c.name })));
 
@@ -129,7 +150,7 @@ const TeacherManageClasses = () => {
                 }
 
                 try {
-                    const url = `http://localhost:8088/api/v1/teacher/assignments/${cls.id}`;
+                    const url = `http://localhost:8088/api/v1/teacher/assignments/${cls.id}?teacher_id=${user.uid}`;
                     console.log(`Fetching assignments from: ${url}`);
 
                     const response = await fetch(url);
@@ -150,7 +171,6 @@ const TeacherManageClasses = () => {
                         });
                     } else if (response.status === 404) {
                         console.log(`No assignments endpoint found for class ${cls.name}, creating empty array`);
-                        // If endpoint doesn't exist, create empty assignments array
                     } else {
                         console.log(`Failed to fetch assignments for class ${cls.name}: ${response.status}`);
                     }
@@ -169,11 +189,11 @@ const TeacherManageClasses = () => {
 
     // Fetch assignments when a specific class is viewed
     const fetchAssignmentsForClass = async (classId) => {
-        if (!classId) return [];
+        if (!classId || !user?.uid) return [];
 
         try {
             console.log(`Fetching assignments for class: ${classId}`);
-            const url = `http://localhost:8088/api/v1/teacher/assignments/${classId}`;
+            const url = `http://localhost:8088/api/v1/teacher/assignments/${classId}?teacher_id=${user.uid}`;
             const response = await fetch(url);
 
             if (response.ok) {
@@ -193,14 +213,21 @@ const TeacherManageClasses = () => {
     };
 
     useEffect(() => {
-        fetchClasses();
-    }, []);
+        if (user && userProfile?.role === 'teacher') {
+            fetchClasses();
+        }
+    }, [user, userProfile]);
 
     const handleTabChange = (event, newValue) => {
         setActiveTab(newValue);
     };
 
     const handleCreateClass = async () => {
+        if (!user?.uid) {
+            setError('User not authenticated');
+            return;
+        }
+
         try {
             setLoading(true);
             setError('');
@@ -210,7 +237,11 @@ const TeacherManageClasses = () => {
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify(newClass)
+                body: JSON.stringify({
+                    ...newClass,
+                    teacher_id: user.uid,
+                    teacher_email: user.email
+                })
             });
 
             if (!response.ok) {
@@ -222,7 +253,7 @@ const TeacherManageClasses = () => {
             setSuccess(`Class "${newClass.name}" created successfully!`);
             setOpenDialog(false);
             setNewClass({ name: '', subject: '', gradeLevel: '10', description: '' });
-            fetchClasses(); // This will refresh classes and assignments
+            fetchClasses();
         } catch (err) {
             setError(err.message);
         } finally {
@@ -231,7 +262,7 @@ const TeacherManageClasses = () => {
     };
 
     const handleAddStudent = async () => {
-        if (!selectedClass) return;
+        if (!selectedClass || !user?.uid) return;
 
         try {
             setLoading(true);
@@ -242,7 +273,10 @@ const TeacherManageClasses = () => {
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify(newStudent)
+                body: JSON.stringify({
+                    ...newStudent,
+                    teacher_id: user.uid
+                })
             });
 
             if (!response.ok) {
@@ -254,7 +288,7 @@ const TeacherManageClasses = () => {
             setSuccess(`Student "${newStudent.name}" added successfully!`);
             setOpenStudentDialog(false);
             setNewStudent({ name: '', email: '' });
-            fetchClasses(); // Refresh to get updated student list
+            fetchClasses();
         } catch (err) {
             setError(err.message);
         } finally {
@@ -263,24 +297,25 @@ const TeacherManageClasses = () => {
     };
 
     const handleCreateAssignment = async () => {
-        if (!selectedClass) return;
+        if (!selectedClass || !user?.uid) return;
 
         try {
             setLoading(true);
             setError('');
 
-            // Prepare assignment data
             const assignmentData = {
                 classId: selectedClass.id,
                 title: newAssignment.title,
                 type: assignmentType,
                 content: newAssignment.content,
                 dueDate: newAssignment.dueDate,
-                questions: newAssignment.questions, // Make sure this is included
-                pdfFile: newAssignment.pdfFile ? newAssignment.pdfFile.name : null
+                questions: newAssignment.questions,
+                pdfFile: newAssignment.pdfFile ? newAssignment.pdfFile.name : null,
+                teacher_id: user.uid,
+                teacher_email: user.email
             };
 
-            console.log('📤 Sending assignment data:', assignmentData); // Debug log
+            console.log('📤 Sending assignment data:', assignmentData);
 
             const response = await fetch('http://localhost:8088/api/v1/teacher/assignments', {
                 method: 'POST',
@@ -310,7 +345,6 @@ const TeacherManageClasses = () => {
             });
             setAssignmentType('text');
 
-            // Refresh the assignments
             fetchClasses();
 
         } catch (err) {
@@ -321,9 +355,11 @@ const TeacherManageClasses = () => {
     };
 
     const handleRemoveStudent = async (classId, studentId) => {
+        if (!user?.uid) return;
+
         try {
             setLoading(true);
-            const response = await fetch(`http://localhost:8088/api/v1/teacher/classes/${classId}/students/${studentId}`, {
+            const response = await fetch(`http://localhost:8088/api/v1/teacher/classes/${classId}/students/${studentId}?teacher_id=${user.uid}`, {
                 method: 'DELETE'
             });
 
@@ -340,6 +376,7 @@ const TeacherManageClasses = () => {
         }
     };
 
+    // Rest of the component remains the same...
     const openAddStudentDialog = (classItem) => {
         setSelectedClass(classItem);
         setOpenStudentDialog(true);
@@ -353,7 +390,6 @@ const TeacherManageClasses = () => {
     const openClassDetails = async (classItem) => {
         setViewClassDetails(classItem);
 
-        // Fetch fresh assignments for this specific class
         const classAssignments = await fetchAssignmentsForClass(classItem.id);
         const assignmentsWithClassInfo = classAssignments.map(assignment => ({
             ...assignment,
@@ -361,7 +397,6 @@ const TeacherManageClasses = () => {
             classId: classItem.id
         }));
 
-        // Update assignments state with fresh data for this class
         const otherAssignments = assignments.filter(a => a.classId !== classItem.id);
         setAssignments([...otherAssignments, ...assignmentsWithClassInfo]);
     };
@@ -405,15 +440,12 @@ const TeacherManageClasses = () => {
         cls.subject.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    // Get assignments for specific class
     const getClassAssignments = (classId) => {
         return assignments.filter(assignment => assignment.classId === classId);
     };
 
-    // Render assignment content based on type
-    // Replace the entire renderAssignmentContent function with this:
     const renderAssignmentContent = (assignment) => {
-        console.log('📋 Rendering assignment:', assignment); // Debug log
+        console.log('📋 Rendering assignment:', assignment);
 
         switch (assignment.type) {
             case 'text':
@@ -428,7 +460,7 @@ const TeacherManageClasses = () => {
             case 'question_bank':
                 const questions = assignment.questions || [];
                 const questionCount = questions.length;
-                console.log('❓ Question bank assignment questions:', questions); // Debug log
+                console.log('❓ Question bank assignment questions:', questions);
 
                 return (
                     <Box>
@@ -488,6 +520,15 @@ const TeacherManageClasses = () => {
         }
     };
 
+    // Show loading while checking authentication
+    if (authLoading) {
+        return (
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+                <CircularProgress />
+            </Box>
+        );
+    }
+
     // Class Details View
     if (viewClassDetails) {
         const classAssignments = getClassAssignments(viewClassDetails.id);
@@ -517,7 +558,6 @@ const TeacherManageClasses = () => {
                         >
                             Create Assignment
                         </Button>
-                        {/* Add this button */}
                         <Button
                             variant="contained"
                             startIcon={<AssignmentIcon />}
@@ -669,9 +709,7 @@ const TeacherManageClasses = () => {
         );
     }
 
-    // Rest of the component (tabs, dialogs, etc.) remains the same...
-    // [Keep all the existing code for the main view]
-
+    // Rest of the component remains exactly the same...
     return (
         <Box sx={{ p: 3, maxWidth: 1200, margin: '0 auto' }}>
             <Typography variant="h4" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
@@ -712,7 +750,6 @@ const TeacherManageClasses = () => {
                     >
                         New Class
                     </Button>
-                    {/* ADD THIS BUTTON */}
                     <Button
                         variant="outlined"
                         startIcon={<AssignmentIcon />}

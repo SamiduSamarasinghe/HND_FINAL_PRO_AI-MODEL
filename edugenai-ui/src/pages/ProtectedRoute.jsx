@@ -19,7 +19,7 @@ const ProtectedRoute = ({ children, requireEmailVerification = true, requiredRol
         return <Navigate to="/login" state={{from: location}} replace />;
     }
 
-    if (requireEmailVerification && !isEmailVerified) {
+    if (requireEmailVerification && !isEmailVerified && user.providerData[0]?.providerId !== 'google.com') {
         return (
             <Container maxWidth="sm" sx={{mt: 8, textAlign: 'center'}}>
                 <Typography variant="h5" gutterBottom>
@@ -27,7 +27,7 @@ const ProtectedRoute = ({ children, requireEmailVerification = true, requiredRol
                 </Typography>
                 <Typography variant="body1" sx={{mb: 3}}>
                     Please verify your email address before accessing the application.
-                    Check your in box for the verification link.
+                    Check your inbox for the verification link.
                 </Typography>
                 <Button variant="contained" onClick={() => window.location.reload()}>
                     I've Verified My Email

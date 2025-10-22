@@ -15,8 +15,11 @@ import {
     CircularProgress
 } from '@mui/material';
 import { Search as SearchIcon } from '@mui/icons-material';
+import { useAuth } from './AuthContext';
 
 const QuestionBankSelection = ({ onQuestionsSelected, onClose }) => {
+    const { user, userProfile } = useAuth();
+
     const [selectedQuestions, setSelectedQuestions] = useState([]);
     const [questions, setQuestions] = useState([]);
     const [filteredQuestions, setFilteredQuestions] = useState([]);
@@ -30,9 +33,11 @@ const QuestionBankSelection = ({ onQuestionsSelected, onClose }) => {
 
     // Fetch questions
     const fetchQuestions = async () => {
+        if (!user?.uid) return;
+
         try {
             setLoading(true);
-            const response = await fetch('http://localhost:8088/api/v1/questions');
+            const response = await fetch(`http://localhost:8088/api/v1/questions?teacher_id=${user.uid}`);
             if (response.ok) {
                 const data = await response.json();
                 const questionsArray = data.questions || [];
@@ -47,8 +52,10 @@ const QuestionBankSelection = ({ onQuestionsSelected, onClose }) => {
     };
 
     useEffect(() => {
-        fetchQuestions();
-    }, []);
+        if (user && userProfile?.role === 'teacher') {
+            fetchQuestions();
+        }
+    }, [user, userProfile]);
 
     useEffect(() => {
         filterQuestions();
