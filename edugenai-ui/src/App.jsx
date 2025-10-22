@@ -18,6 +18,7 @@ import TeacherUploadPapers from "./pages/TeacherUploadPapers.jsx";
 import AnalyticsPage from './pages/analytics.jsx';
 import StudentAssignments from './pages/StudentAssignments.jsx';
 import TeacherViewSubmissions from './pages/TeacherViewSubmissions.jsx';
+import ChatUI from './pages/AITutor.jsx';
 
 const theme = createTheme({
     palette: {
@@ -79,6 +80,11 @@ function App() {
                                 <StudentAssignments />
                             </ProtectedRoute>
                         } />
+                        <Route path="/ai/chat" element={
+                            <ProtectedRoute requireEmailVerification={true}>
+                                <ChatUI/>
+                            </ProtectedRoute>
+                        }/>
 
                         {/*Teacher Routes - Require teacher role*/}
                         <Route path="/teacher" element={
@@ -116,6 +122,12 @@ function App() {
                                 <TeacherViewSubmissions />
                             </ProtectedRoute>
                         } />
+
+                        <Route path="/ai/chat" element={
+                            <ProtectedRoute requireEmailVerification={true}>
+                                <ChatUI/>
+                            </ProtectedRoute>
+                        }/>
 
                         {/*Fallback route*/}
                         <Route path="*" element={<Login />} />

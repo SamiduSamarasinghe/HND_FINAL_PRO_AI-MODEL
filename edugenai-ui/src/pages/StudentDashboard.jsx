@@ -255,7 +255,7 @@ const StudentDashboard = () => {
                         { text: 'Upload Papers', icon: <UploadIcon />, path: '/upload-papers' },
                         { text: 'Generate Test', icon: <GenerateIcon />, path: '/generate-test' },
                         { text: 'Analytics', icon: <AnalyticsIcon />, path: '/analytics' },
-                        { text: 'AI Tutor', icon: <TutorIcon /> }
+                        { text: 'AI Tutor', icon: <TutorIcon />,path:'/ai/chat' }
                     ].map((item, index) => (
                         <ListItem
                             button
