@@ -115,7 +115,7 @@ const TeacherDashboard = () => {
                         { text: 'Create Paper', icon: <CreateIcon />, path: '/teacher/create-exam' },
                         { text: 'Upload Papers', icon: <UploadIcon />, path: '/teacher/upload-papers' },
                         { text: 'Analytics', icon: <AnalyticsIcon /> },
-                        { text: 'AI Assistant', icon: <AssistantIcon /> },
+                        { text: 'AI Assistant', icon: <AssistantIcon />,path:'/ai/chat'},
                         { /*text: 'Student Progress', icon: <ManageClassesIcon /> */},
                         {/* text: 'Profile', icon: <ManageAccountsIcon /> },
                         { text: 'Settings', icon: <ManageAccountsIcon /> */}
