@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useAuth } from './AuthContext.jsx';
+import { useNavigate } from 'react-router-dom';
 import {
     Box,
     Typography,
@@ -15,7 +17,8 @@ import {
     MenuItem,
     FormControl,
     Select,
-    InputLabel
+    InputLabel,
+    CircularProgress
 } from '@mui/material';
 import { 
     Upload as UploadIcon, 
@@ -38,6 +41,8 @@ import {
 } from 'recharts';
 
 const AnalyticsPage = () => {
+    const { user, userProfile, loading: authLoading } = useAuth();
+    const navigate = useNavigate();
     const [file, setFile] = useState(null);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [error, setError] = useState('');
@@ -47,13 +52,28 @@ const AnalyticsPage = () => {
     const [selectedFilter, setSelectedFilter] = useState("All");
     const [geminiResult, setGeminiResult] = useState(null);
 
-    const USER_ID = '0jFxW0e6M8OqccyF5Gxb8QxFkD93';
+
+    // Check authentication and role
+    useEffect(() => {
+        if (!authLoading) {
+            if (!user) {
+                navigate('/login');
+                return;
+            }
+            if (userProfile?.role !== 'student') {
+                navigate('/select-role');
+                return;
+            }
+        }
+    }, [user, userProfile, authLoading, navigate]);
 
     // Fetch all subjects
     useEffect(() => {
+        if (!user) return;
+
         const fetchSubjects = async () => {
             try {
-                const response = await fetch(`http://127.0.0.1:8088/api/v1/feedbacks/subjects?userid=${USER_ID}`);
+                const response = await fetch(`http://127.0.0.1:8088/api/v1/feedbacks/subjects?userid=${user.uid}`);
                 const data = await response.json();
                 setSubjects(data);
             } catch (err) {
@@ -62,16 +82,18 @@ const AnalyticsPage = () => {
             }
         };
         fetchSubjects();
-    }, []);
+    }, [user]);
 
     // Fetch feedbacks, either all or filtered
     const fetchFeedbacks = async (subjectFilter = "All") => {
+        if (!user) return;
+
         setLoading(true);
         try {
             const url =
                 subjectFilter === "All"
-                    ? `http://127.0.0.1:8088/api/v1/feedbacks?userid=${USER_ID}`
-                    : `http://127.0.0.1:8088/api/v1/feedbacks/filter?userid=${USER_ID}&subject=${encodeURIComponent(subjectFilter)}`;
+                    ? `http://127.0.0.1:8088/api/v1/feedbacks?userid=${user.uid}`
+                    : `http://127.0.0.1:8088/api/v1/feedbacks/filter?userid=${user.uid}&subject=${encodeURIComponent(subjectFilter)}`;
             const response = await fetch(url);
             const data = await response.json();
             setFeedbacks(data);
@@ -84,8 +106,10 @@ const AnalyticsPage = () => {
     };
 
     useEffect(() => {
-        fetchFeedbacks();
-    }, []);
+        if (user) {
+            fetchFeedbacks();
+        }
+    }, [user]);
 
     const handleFilterChange = (event) => {
         const value = event.target.value;
@@ -115,6 +139,8 @@ const AnalyticsPage = () => {
     }, []);
 
     const handlePaperAnalysis = async (fileToAnalyze) => {
+        if (!user) return;
+
         setIsAnalyzing(true);
         setError('');
 
@@ -123,7 +149,7 @@ const AnalyticsPage = () => {
             formData.append('file', fileToAnalyze);
 
             const response = await fetch(
-                `http://127.0.0.1:8088/api/v1/gemini/grade?userid=${USER_ID}`,
+                `http://127.0.0.1:8088/api/v1/gemini/grade?userid=${user.uid}`,
                 {
                     method: 'POST',
                     body: formData
@@ -203,7 +229,7 @@ const AnalyticsPage = () => {
     };
 
     // Conditional chart data
-    const chartData = selectedFilter === "All" 
+    const chartData = selectedFilter === "All"
         ? prepareSubjectData().map(d => ({
             name: d.subject,
             averagePercentage: d.averagePercentage,
@@ -212,6 +238,20 @@ const AnalyticsPage = () => {
         : prepareChartData();
 
     const questionChartData = selectedFilter === "All" ? [] : prepareQuestionData();
+
+    // Show loading while checking authentication
+    if (authLoading) {
+        return (
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+                <CircularProgress />
+            </Box>
+        );
+    }
+
+    // Redirect if not student (handled by useEffect, but return null during redirect)
+    if (!user || userProfile?.role !== 'student') {
+        return null;
+    }
 
     return (
         <Box sx={{ p: 3, maxWidth: 1200, margin: '0 auto' }}>

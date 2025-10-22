@@ -93,7 +93,7 @@ function App() {
                         } />
                         <Route path="/teacher/question-bank" element={
                             <ProtectedRoute requireEmailVerification={true}>
-                                <TeacherUploadQuestions />
+                                <TeacherQuestionBank />
                             </ProtectedRoute>
                         } />
                         <Route path="/upload-questions" element={

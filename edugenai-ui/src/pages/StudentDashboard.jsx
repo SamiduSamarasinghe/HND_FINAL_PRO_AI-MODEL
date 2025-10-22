@@ -1,5 +1,8 @@
 import React, {useEffect, useState} from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from './AuthContext.jsx';
+import { getFirestore, doc, getDoc } from 'firebase/firestore';
+
 import {
     Box,
     Typography,
@@ -16,7 +19,8 @@ import {
     Paper,
     Divider,
     Button,
-    Stack
+    Stack,
+    CircularProgress
 } from '@mui/material';
 import {
     Menu as MenuIcon,
@@ -34,20 +38,37 @@ import {
 } from '@mui/icons-material';
 
 const StudentDashboard = () => {
+    const { user, userProfile, loading: authLoading } = useAuth();
+    const navigate = useNavigate();
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const [activeTab, setActiveTab] = useState('recentPapers');
-    const navigate = useNavigate();
     const [notificationCount, setNotificationCount] = useState(0);
+    const [studentData, setStudentData] = useState(null);
+
+    // Check authentication and role
+    useEffect(() => {
+        if (!authLoading) {
+            if (!user) {
+                navigate('/login');
+                return;
+            }
+            if (userProfile?.role !== 'student') {
+                navigate('/select-role');
+                return;
+            }
+        }
+    }, [user, userProfile, authLoading, navigate]);
 
     useEffect(() => {
-        fetchNotificationCount();
-    }, []);
+        if (user) {
+            fetchNotificationCount();
+            fetchStudentData();
+        }
+    }, [user]);
 
     const fetchNotificationCount = async () => {
         try {
-            const studentEmail = "student@example.com"; // Replace with actual email
-            const response = await fetch(`http://localhost:8088/api/v1/student/notifications/${studentEmail}`);
-
+            const response = await fetch(`http://localhost:8088/api/v1/student/notifications/${user.uid}`);
             if (response.ok) {
                 const data = await response.json();
                 setNotificationCount(data.unread_count);
@@ -57,33 +78,152 @@ const StudentDashboard = () => {
         }
     };
 
-    const studentData = {
-        name: "Sarah",
-        taskQuestions: 804,
-        papersAnalyzed: 23,
-        mockTests: 12,
-        studyStreak: 7,
-        recentPapers: [
-            { title: "Mathematics Final Exam 2023", questions: 45, date: "2024-01-15" },
-            { title: "Physics Midterm 2023", questions: 32, date: "2024-01-12" },
-            { title: "Chemistry Quiz 2023", questions: 20, date: "2024-01-10" }
-        ],
-        mockTestResults: [
-            { title: "Mathematics Practice Test #1", score: "85/100 (95%)", date: "2024-01-14" },
-            { title: "Physics Revision Test", score: "78/100 (75%)", date: "2024-01-13" },
-            { title: "Mixed Topics Test", score: "92/100 (95%)", date: "2024-01-11" }
-        ],
-        studyActivities: [
-            { title: "Practiced 25 Mathematics questions", time: "2 hours ago" },
-            { title: "Completed Physics Mock Test", time: "Yesterday" },
-            { title: "Uploaded Chemistry Final Exam", time: "2 days ago" }
-        ],
-        tutorMessage: "I noticed you're struggling with calculus derivatives. Would you like me to create a focused practice set?"
+    const fetchStudentData = async () => {
+        try {
+            const db = getFirestore();
+            const studentDoc = await getDoc(doc(db, 'students', user.uid));
+
+            if (studentDoc.exists()) {
+                const firestoreData = studentDoc.data();
+
+                // Calculate derived data from Firestore
+                const mockTests = firestoreData.mockTests || [];
+                const submissions = firestoreData.submissions || [];
+                const progress = firestoreData.progress || {};
+
+                setStudentData({
+                    name: user.displayName || user.email?.split('@')[0] || "Student",
+                    taskQuestions: progress.totalQuestions || Object.values(progress).reduce((sum, subject) => sum + (subject.questions || 0), 0) || 0,
+                    papersAnalyzed: submissions.length || 0,
+                    mockTests: mockTests.length,
+                    studyStreak: progress.studyStreak || firestoreData.studyStreak || 0,
+                    recentPapers: submissions.slice(0, 3).map(sub => ({
+                        title: sub.title || `Paper ${sub.id}`,
+                        questions: sub.questionsCount || 0,
+                        date: sub.submittedAt?.toDate?.().toISOString().split('T')[0] || new Date().toISOString().split('T')[0]
+                    })),
+                    mockTestResults: mockTests.slice(0, 3).map(test => ({
+                        title: test.title || `Mock Test ${test.id}`,
+                        score: `${test.score || 0}/${test.totalPoints || 100} (${Math.round(((test.score || 0) / (test.totalPoints || 100)) * 100)}%)`,
+                        date: test.completedAt?.toDate?.().toISOString().split('T')[0] || new Date().toISOString().split('T')[0]
+                    })),
+                    studyActivities: generateRecentActivities(firestoreData),
+                    tutorMessage: getPersonalizedTutorMessage(firestoreData, progress)
+                });
+            } else {
+                // New student - initialize with empty data
+                setStudentData({
+                    name: user.displayName || user.email?.split('@')[0] || "Student",
+                    taskQuestions: 0,
+                    papersAnalyzed: 0,
+                    mockTests: 0,
+                    studyStreak: 0,
+                    recentPapers: [],
+                    mockTestResults: [],
+                    studyActivities: [
+                        { title: "Complete your first paper upload", time: "Get started" },
+                        { title: "Take your first mock test", time: "Ready when you are" }
+                    ],
+                    tutorMessage: `Welcome! I'm your AI tutor. Upload your first paper to get started with personalized learning.`
+                });
+            }
+        } catch (err) {
+            console.error('Error fetching student data from Firestore:', err);
+            // Fallback to default data
+            const studentName = user.displayName || user.email?.split('@')[0] || "Student";
+            setStudentData({
+                name: studentName,
+                taskQuestions: 0,
+                papersAnalyzed: 0,
+                mockTests: 0,
+                studyStreak: 0,
+                recentPapers: [],
+                mockTestResults: [],
+                studyActivities: [
+                    { title: "Complete your first paper upload", time: "Get started" },
+                    { title: "Take your first mock test", time: "Ready when you are" }
+                ],
+                tutorMessage: `Welcome ${studentName}! Upload your first paper to begin your learning journey.`
+            });
+        }
+    };
+
+// Helper function to generate recent activities
+    const generateRecentActivities = (firestoreData) => {
+        const activities = [];
+        const now = new Date();
+
+        // Add mock test activities
+        const recentTests = (firestoreData.mockTests || []).slice(0, 2);
+        recentTests.forEach(test => {
+            const testDate = test.completedAt?.toDate?.() || now;
+            const daysAgo = Math.floor((now - testDate) / (1000 * 60 * 60 * 24));
+            activities.push({
+                title: `Completed ${test.title || 'a mock test'}`,
+                time: daysAgo === 0 ? 'Today' : daysAgo === 1 ? 'Yesterday' : `${daysAgo} days ago`
+            });
+        });
+
+        // Add submission activities
+        const recentSubmissions = (firestoreData.submissions || []).slice(0, 2);
+        recentSubmissions.forEach(sub => {
+            const subDate = sub.submittedAt?.toDate?.() || now;
+            const daysAgo = Math.floor((now - subDate) / (1000 * 60 * 60 * 24));
+            activities.push({
+                title: `Uploaded ${sub.title || 'a paper'}`,
+                time: daysAgo === 0 ? 'Today' : daysAgo === 1 ? 'Yesterday' : `${daysAgo} days ago`
+            });
+        });
+
+        // Fill with default activities if needed
+        if (activities.length === 0) {
+            activities.push(
+                { title: "Complete your first paper upload", time: "Get started" },
+                { title: "Take your first mock test", time: "Ready when you are" }
+            );
+        }
+
+        return activities.slice(0, 3);
+    };
+
+// Helper function for personalized tutor messages
+    const getPersonalizedTutorMessage = (firestoreData, progress) => {
+        const studentName = user.displayName || user.email?.split('@')[0] || "Student";
+
+        if (!firestoreData.mockTests || firestoreData.mockTests.length === 0) {
+            return `Welcome ${studentName}! I'm your AI tutor. Upload your first paper or take a mock test to get started with personalized learning.`;
+        }
+
+        // Analyze performance if we have mock tests
+        const latestTest = firestoreData.mockTests[0];
+        const averageScore = firestoreData.mockTests.reduce((sum, test) => sum + (test.score || 0), 0) / firestoreData.mockTests.length;
+
+        if (averageScore < 60) {
+            return `Hi ${studentName}, I see you're working hard! Let's focus on strengthening your fundamentals. Would you like practice questions on your weaker topics?`;
+        } else if (averageScore < 80) {
+            return `Great work ${studentName}! You're making good progress. I can create advanced practice sets to help you reach the next level.`;
+        } else {
+            return `Excellent performance ${studentName}! You're mastering the material. Ready for some challenging questions to push your limits?`;
+        }
     };
 
     const handleTabChange = (event, newValue) => {
         setActiveTab(newValue);
     };
+
+    // Show loading while checking authentication or fetching data
+    if (authLoading || !studentData) {
+        return (
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+                <CircularProgress />
+            </Box>
+        );
+    }
+
+    // Redirect if not student (handled by useEffect, but return null during redirect)
+    if (!user || userProfile?.role !== 'student') {
+        return null;
+    }
 
     return (
         <Box sx={{ display: 'flex', bgcolor: '#f8f9fa', minHeight: '100vh' }}>
@@ -114,7 +254,7 @@ const StudentDashboard = () => {
                         { text: 'Question Bank', icon: <PaperIcon />, path: '/question-bank' },
                         { text: 'Upload Papers', icon: <UploadIcon />, path: '/upload-papers' },
                         { text: 'Generate Test', icon: <GenerateIcon />, path: '/generate-test' },
-                        { text: 'Analytics', icon: <AnalyticsIcon />,path: '/analytics' },
+                        { text: 'Analytics', icon: <AnalyticsIcon />, path: '/analytics' },
                         { text: 'AI Tutor', icon: <TutorIcon /> }
                     ].map((item, index) => (
                         <ListItem
@@ -344,7 +484,7 @@ const StudentDashboard = () => {
                                                 borderColor: 'primary.main'
                                             }
                                         }}
-                                        onClick={() => navigate('')}
+                                        onClick={() => navigate('/upload-papers')}
                                     >
                                         Upload New Paper
                                     </Button>
@@ -364,7 +504,7 @@ const StudentDashboard = () => {
                                                 borderColor: 'primary.main'
                                             }
                                         }}
-                                        onClick={() => navigate('/generate-test')} // Add this line
+                                        onClick={() => navigate('/generate-test')}
                                     >
                                         Generate Mock Test
                                     </Button>

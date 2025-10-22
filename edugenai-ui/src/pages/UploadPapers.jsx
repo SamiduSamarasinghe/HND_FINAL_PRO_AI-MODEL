@@ -1,4 +1,6 @@
 import { useState, useCallback } from 'react';
+import { useAuth } from './AuthContext';
+import { useNavigate } from 'react-router-dom';
 import {
     Box,
     Typography,
@@ -14,11 +16,14 @@ import {
     DialogContent,
     DialogActions,
     TextField,
-    Alert
+    Alert,
+    CircularProgress
 } from '@mui/material';
 import { Upload as UploadIcon, InsertDriveFile, ContentCopy } from '@mui/icons-material';
 
 const UploadPapers = () => {
+    const { user, userProfile, loading: authLoading } = useAuth();
+    const navigate = useNavigate();
     const [file, setFile] = useState(null);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [analysisResult, setAnalysisResult] = useState(null);
@@ -27,7 +32,24 @@ const UploadPapers = () => {
     const [openDialog, setOpenDialog] = useState(false);
     const [error, setError] = useState('');
 
+    // Check authentication and role
+    const checkAuth = () => {
+        if (!authLoading) {
+            if (!user) {
+                navigate('/login');
+                return false;
+            }
+            if (userProfile?.role !== 'student') {
+                navigate('/select-role');
+                return false;
+            }
+        }
+        return true;
+    };
+
     const handleFileChange = (e) => {
+        if (!checkAuth()) return;
+
         const selectedFile = e.target.files[0];
         if (selectedFile && selectedFile.type === 'application/pdf') {
             setFile(selectedFile);
@@ -37,16 +59,18 @@ const UploadPapers = () => {
 
     const handleDrop = useCallback((e) => {
         e.preventDefault();
+        if (!checkAuth()) return;
+
         const droppedFile = e.dataTransfer.files[0];
         if (droppedFile && droppedFile.type === 'application/pdf') {
             setFile(droppedFile);
             setOpenDialog(true);
         }
-    }, []);
+    }, [user, userProfile, authLoading]);
 
     const handlePaperTypeSubmit = () => {
         setOpenDialog(false);
-        if (file && subject) {
+        if (file && subject && user) {
             processFile(file, subject);
         }
     };
@@ -60,12 +84,13 @@ const UploadPapers = () => {
         try {
             const formData = new FormData();
             formData.append('file', file);
+            formData.append('user_id', user.uid); // Add user ID for tracking
 
             // Call similarity analysis first but don't set state yet
             const similarityPromise = callSimilarityAnalysis(file, subject);
 
             // First API call
-            const url = `http://localhost:8088/api/v1/pdf-reader?isPaper=true&subject=${encodeURIComponent(subject)}`;
+            const url = `http://localhost:8088/api/v1/pdf-reader?isPaper=true&subject=${encodeURIComponent(subject)}&user_id=${user.uid}`;
             const response = await fetch(url, {
                 method: 'POST',
                 body: formData,
@@ -102,11 +127,12 @@ const UploadPapers = () => {
         try {
             const formData = new FormData();
             formData.append('file', file);
+            formData.append('user_id', user.uid); // Add user ID
 
-            const similarityUrl = `http://127.0.0.1:8088/api/v1/pdf-reader/analyze?subject=${encodeURIComponent(subject)}`;
+            const similarityUrl = `http://127.0.0.1:8088/api/v1/pdf-reader/analyze?subject=${encodeURIComponent(subject)}&user_id=${user.uid}`;
             const response = await fetch(similarityUrl, {
-                method: 'POST', 
-                body: formData, // Include the file in the request
+                method: 'POST',
+                body: formData,
             });
 
             if (!response.ok) {
@@ -126,7 +152,6 @@ const UploadPapers = () => {
 
         } catch (err) {
             console.error('Similarity analysis error:', err);
-            // Return null or empty object instead of throwing to avoid breaking the main flow
             return null;
         }
     };
@@ -146,15 +171,27 @@ const UploadPapers = () => {
     // Helper function to safely get message text
     const getMessageText = (result) => {
         if (!result || !result.message) return 'Document processed successfully';
-        
-        // If message is an object, try to extract the text
+
         if (typeof result.message === 'object') {
             return result.message.message || JSON.stringify(result.message);
         }
-        
-        // If message is a string, return it directly
+
         return result.message;
     };
+
+    // Show loading while checking authentication
+    if (authLoading) {
+        return (
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+                <CircularProgress />
+            </Box>
+        );
+    }
+
+    // Redirect if not student (handled by useEffect, but return null during redirect)
+    if (!user || userProfile?.role !== 'student') {
+        return null;
+    }
 
     return (
         <Box sx={{ p: 3, maxWidth: 800, margin: '0 auto', textAlign: 'center' }}>
@@ -241,7 +278,6 @@ const UploadPapers = () => {
                             />
                         </Box>
 
-                        {/* FIXED: Use helper function to safely get message text */}
                         <Typography color="text.secondary" gutterBottom>
                             {getMessageText(analysisResult)}
                         </Typography>
@@ -261,7 +297,6 @@ const UploadPapers = () => {
                                 Copy
                             </Button>
 
-                            {/* FIXED: Properly render the processing summary */}
                             <Typography paragraph sx={{ bgcolor: '#f5f5f5', p: 2, borderRadius: 1 }}>
                                 {analysisResult.questions_processed} questions processed and saved to {analysisResult.subject}
                                 {analysisResult.ai_generated_questions > 0 && (

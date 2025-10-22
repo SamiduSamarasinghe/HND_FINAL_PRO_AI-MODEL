@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { useAuth } from './AuthContext';
+import { useNavigate } from 'react-router-dom';
 import {
     Box,
     Typography,
@@ -30,6 +32,8 @@ import {
 } from '@mui/icons-material';
 
 const StudentAssignments = () => {
+    const { user, userProfile, loading: authLoading } = useAuth();
+    const navigate = useNavigate();
     const [assignments, setAssignments] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -40,12 +44,25 @@ const StudentAssignments = () => {
     const [uploading, setUploading] = useState(false);
     const [studentClasses, setStudentClasses] = useState([]);
 
-    const studentEmail = "student@example.com"; // Replace with actual student email from auth
-    const studentName = "Student Name"; // Replace with actual student name
+    // Check authentication and role
+    useEffect(() => {
+        if (!authLoading) {
+            if (!user) {
+                navigate('/login');
+                return;
+            }
+            if (userProfile?.role !== 'student') {
+                navigate('/select-role');
+                return;
+            }
+        }
+    }, [user, userProfile, authLoading, navigate]);
 
     useEffect(() => {
-        fetchStudentClasses();
-    }, []);
+        if (user) {
+            fetchStudentClasses();
+        }
+    }, [user]);
 
     // First, get all classes where this student is enrolled
     const fetchStudentClasses = async () => {
@@ -55,7 +72,10 @@ const StudentAssignments = () => {
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ studentEmail: studentEmail })
+                body: JSON.stringify({
+                    studentEmail: user.email,
+                    studentId: user.uid
+                })
             });
 
             if (response.ok) {
@@ -84,12 +104,12 @@ const StudentAssignments = () => {
 
             for (const classItem of classes) {
                 try {
-                    console.log(`📋 Fetching assignments for class: ${classItem.name} (${classItem.id})`);
-                    const response = await fetch(`http://localhost:8088/api/v1/student/assignments/${classItem.id}?student_email=${studentEmail}`);
+                    console.log(`Fetching assignments for class: ${classItem.name} (${classItem.id})`);
+                    const response = await fetch(`http://localhost:8088/api/v1/student/assignments/${classItem.id}?student_email=${user.email}&student_id=${user.uid}`);
 
                     if (response.ok) {
                         const data = await response.json();
-                        console.log(`✅ Found ${data.assignments?.length || 0} assignments for class ${classItem.name}`);
+                        console.log(`Found ${data.assignments?.length || 0} assignments for class ${classItem.name}`);
 
                         const assignmentsWithClass = (data.assignments || []).map(assignment => ({
                             ...assignment,
@@ -98,17 +118,17 @@ const StudentAssignments = () => {
                         }));
                         allAssignments.push(...assignmentsWithClass);
                     } else {
-                        console.error(`❌ Failed to fetch assignments for class ${classItem.name}: ${response.status}`);
+                        console.error(`Failed to fetch assignments for class ${classItem.name}: ${response.status}`);
                     }
                 } catch (classError) {
-                    console.error(`❌ Error fetching assignments for class ${classItem.name}:`, classError);
+                    console.error(`Error fetching assignments for class ${classItem.name}:`, classError);
                 }
             }
 
-            console.log(`📊 Total assignments found: ${allAssignments.length}`);
+            console.log(`Total assignments found: ${allAssignments.length}`);
             setAssignments(allAssignments);
         } catch (err) {
-            console.error('❌ Error fetching assignments:', err);
+            console.error('Error fetching assignments:', err);
             setError('Failed to load assignments');
         } finally {
             setLoading(false);
@@ -140,8 +160,9 @@ const StudentAssignments = () => {
 
             const formData = new FormData();
             formData.append('assignment_id', selectedAssignment.id);
-            formData.append('student_email', studentEmail);
-            formData.append('student_name', studentName);
+            formData.append('student_email', user.email);
+            formData.append('student_name', user.displayName || 'Student');
+            formData.append('student_id', user.uid);
             formData.append('class_id', selectedAssignment.classId);
             formData.append('file', selectedFile);
 
@@ -275,6 +296,20 @@ const StudentAssignments = () => {
         if (diffDays === 1) return 'Due tomorrow';
         return `Due in ${diffDays} days`;
     };
+
+    // Show loading while checking authentication
+    if (authLoading) {
+        return (
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+                <CircularProgress />
+            </Box>
+        );
+    }
+
+    // Redirect if not student (handled by useEffect, but return null during redirect)
+    if (!user || userProfile?.role !== 'student') {
+        return null;
+    }
 
     if (loading) {
         return (
