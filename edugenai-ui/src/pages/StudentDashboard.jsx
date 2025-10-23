@@ -49,6 +49,9 @@ const StudentDashboard = () => {
     const handleLogout = async () => {
         try {
             await logout();
+            localStorage.clear();
+            sessionStorage.clear();
+
             navigate('/login');
         } catch (error) {
             console.error('Logout failed:', error);
