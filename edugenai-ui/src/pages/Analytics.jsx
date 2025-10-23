@@ -383,7 +383,7 @@ const AnalyticsPage = () => {
             <Typography variant="h4" gutterBottom sx={{ fontWeight: 'bold', mb: 2, textAlign: 'center' }}>
                 Analytics Dashboard
             </Typography>
-            <Button onClick={redirectToHome}>Go Back</Button>
+            <Button onClick={redirectToHome}>Go Back</Button><Divider sx={{mb:2}} />
             {/* File Upload Section - Only show for students */}
             {userProfile?.role === 'student' && (
                 <Box sx={{ textAlign: 'center', mb: 4 }}>

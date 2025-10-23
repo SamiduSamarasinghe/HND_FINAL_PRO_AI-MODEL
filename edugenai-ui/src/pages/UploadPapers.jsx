@@ -193,12 +193,18 @@ const UploadPapers = () => {
         return null;
     }
 
+    const returnHome = () =>{
+        userProfile?.role === 'student'? navigate('/student'):navigate('/')
+    }
+
     return (
         <Box sx={{ p: 3, maxWidth: 800, margin: '0 auto', textAlign: 'center' }}>
             <Typography variant="h4" gutterBottom sx={{ fontWeight: 'bold', mb: 2 }}>
                 PDF AI Analyzer
             </Typography>
-
+            <Box sx={{ textAlign: 'left', mb: 2 }}>
+                <Button onClick={returnHome}>Go Back</Button><Divider sx={{ mt: 1 }}/>
+            </Box>
             <Typography variant="body1" color="text.secondary" sx={{ mb: 4, maxWidth: 600, mx: 'auto' }}>
                 Upload your past papers and get instant AI-powered analysis, summaries, and insights.
             </Typography>

@@ -165,6 +165,7 @@ const MockTest = () => {
         setError('');
     };
 
+
     // Show loading while checking authentication
     if (authLoading) {
         return (
@@ -179,11 +180,19 @@ const MockTest = () => {
         return null;
     }
 
+    const returnHome = () =>{
+        userProfile?.role ==='student'? navigate('/student'):navigate('/')
+    }
+
     return (
         <Box sx={{ p: 3, maxWidth: 800, margin: '0 auto', textAlign: 'center' }}>
             <Typography variant="h4" gutterBottom sx={{ fontWeight: 'bold', mb: 2 }}>
                 Generate Mock Test
             </Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'flex-start', mb: 1 }}>
+                <Button onClick={returnHome}>Go Back</Button>
+            </Box>
+            <Divider sx={{ flexGrow: 1, ml: 2, borderBottomWidth: 2 }} />
 
             {!generatedTest ? (
                 <>
