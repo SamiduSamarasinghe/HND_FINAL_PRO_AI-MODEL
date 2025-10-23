@@ -124,6 +124,11 @@ function App() {
                                 <TeacherViewSubmissions />
                             </ProtectedRoute>
                         } />
+                        <Route path="/teacher/analytics" element={
+                            <ProtectedRoute requiredRole="teacher">
+                                <AnalyticsPage />
+                            </ProtectedRoute>
+                        } />
 
                         {/* FALLBACK ROUTE */}
                         <Route path="*" element={<Navigate to="/login" replace />} />

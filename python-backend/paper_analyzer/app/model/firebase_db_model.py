@@ -172,9 +172,13 @@ def save_mock_test_feed_back(data: dict, user: str):
 
 def get_all_feedback_for_userid(userid):
     try:
-        qurry = (__db.collection("mock_test_feedback")
-                 .where(filter=FieldFilter("user_id","==",userid))
-                 .stream())
+        if(userid is not None):
+            qurry = (__db.collection("mock_test_feedback")
+                     .where(filter=FieldFilter("user_id","==",userid))
+                     .stream())
+        else:
+            qurry = (__db.collection("mock_test_feedback")
+                     .stream())
 
         feed_back_list =[]
 
@@ -193,14 +197,21 @@ def get_all_feedback_for_userid(userid):
 def get_all_feedback_by_subject(userid,subject):
 
     try:
-        qurry = (__db.collection("mock_test_feedback")
-                  .where(filter=FieldFilter("user_id","==",userid))
-                 .where(filter=FieldFilter("subject", "==",subject))
-                 .stream())
+
+        if(userid is not None):
+            query = (__db.collection("mock_test_feedback")
+                      .where(filter=FieldFilter("user_id","==",userid))
+                     .where(filter=FieldFilter("subject", "==",subject))
+                     .stream())
+        else:
+            query = (__db.collection("mock_test_feedback")
+                     .where(filter=FieldFilter("subject", "==", subject))
+                     .stream())
+
 
         feed_back_list =[]
 
-        for doc in qurry:
+        for doc in query:
             data = doc.to_dict()
             data["id"] =doc.id
             feed_back_list.append(data)
@@ -214,10 +225,16 @@ def get_all_feedback_by_subject(userid,subject):
 
 def get_all_subjects_on_feedbacks(userid):
     try:
-        qurry = (__db.collection("mock_test_feedback")
-                 .where("user_id", "==", userid)
-                 .select(["subject"])
-                 .stream())
+        if(userid is not None):
+            qurry = (__db.collection("mock_test_feedback")
+                     .where("user_id", "==", userid)
+                     .select(["subject"])
+                     .stream())
+        else:
+            qurry = (__db.collection("mock_test_feedback")
+                     .select(["subject"])
+                     .stream())
+
 
         subject_set = set()
 
