@@ -282,10 +282,10 @@ const StudentDashboard = () => {
                 <List>
                     {[
                         { text: 'Dashboard', icon: <MenuIcon />, path: '/student' },
-                        { text: 'Question Bank', icon: <PaperIcon />, path: '/question-bank' },
-                        { text: 'Upload Papers', icon: <UploadIcon />, path: '/upload-papers' },
-                        { text: 'Generate Test', icon: <GenerateIcon />, path: '/generate-test' },
-                        { text: 'Analytics', icon: <AnalyticsIcon />, path: '/analytics' },
+                        { text: 'Question Bank', icon: <PaperIcon />, path: '/student/question-bank' },
+                        { text: 'Upload Papers', icon: <UploadIcon />, path: '/student/upload-papers' },
+                        { text: 'Generate Test', icon: <GenerateIcon />, path: '/student/generate-test' },
+                        { text: 'Analytics', icon: <AnalyticsIcon />, path: '/student/analytics' },
                         { text: 'AI Tutor', icon: <TutorIcon />,path:'/ai/chat' }
                     ].map((item, index) => (
                         <ListItem
