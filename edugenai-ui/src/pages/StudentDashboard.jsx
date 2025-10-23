@@ -1,7 +1,6 @@
 import React, {useEffect, useState} from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext.jsx';
-import { getFirestore, doc, getDoc } from 'firebase/firestore';
 
 import {
     Box,
@@ -79,7 +78,11 @@ const StudentDashboard = () => {
 
     const fetchNotificationCount = async () => {
         try {
-            const response = await fetch(`http://localhost:8088/api/v1/student/notifications/${user.uid}`);
+            //Use actual student eamil.
+            const studentEmail = user?.email;
+            if (!studentEmail) return;
+
+            const response = await fetch(`http://localhost:8088/api/v1/student/notifications/${studentEmail}`);
             if (response.ok) {
                 const data = await response.json();
                 setNotificationCount(data.unread_count);
@@ -91,97 +94,114 @@ const StudentDashboard = () => {
 
     const fetchStudentData = async () => {
         try {
-            const db = getFirestore();
-            const studentDoc = await getDoc(doc(db, 'students', user.uid));
+            const studentEmail = user?.email;
+            if (!studentEmail) return;
 
-            if (studentDoc.exists()) {
-                const firestoreData = studentDoc.data();
+            // 1. Fetch student's enrolled classes
+            const classesResponse = await fetch('http://localhost:8088/api/v1/student/classes', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    studentEmail: studentEmail
+                })
+            });
 
-                // Calculate derived data from Firestore
-                const mockTests = firestoreData.mockTests || [];
-                const submissions = firestoreData.submissions || [];
-                const progress = firestoreData.progress || {};
+            if (classesResponse.ok) {
+                const classesData = await classesResponse.json();
+                const studentClasses = classesData.classes || [];
+
+                // 2. Fetch assignments for all classes
+                let allAssignments = [];
+                let totalSubmissions = 0;
+
+                for (const classItem of studentClasses) {
+                    const assignmentsResponse = await fetch(`http://localhost:8088/api/v1/student/assignments/${classItem.id}?student_email=${studentEmail}`);
+                    if (assignmentsResponse.ok) {
+                        const assignmentsData = await assignmentsResponse.json();
+                        const classAssignments = assignmentsData.assignments || [];
+
+                        // Count submissions
+                        classAssignments.forEach(assignment => {
+                            if (assignment.submission) {
+                                totalSubmissions++;
+                            }
+                        });
+
+                        allAssignments = [...allAssignments, ...classAssignments];
+                    }
+                }
+
+                // 3. Fetch student's own submissions
+                const submissionsResponse = await fetch(`http://localhost:8088/api/v1/student/submissions/${studentEmail}`);
+                const submissionsData = submissionsResponse.ok ? await submissionsResponse.json() : { submissions: [] };
+
+                // Calculate real data
+                const studentName = user.displayName || user.email?.split('@')[0] || "Student";
 
                 setStudentData({
-                    name: user.displayName || user.email?.split('@')[0] || "Student",
-                    taskQuestions: progress.totalQuestions || Object.values(progress).reduce((sum, subject) => sum + (subject.questions || 0), 0) || 0,
-                    papersAnalyzed: submissions.length || 0,
-                    mockTests: mockTests.length,
-                    studyStreak: progress.studyStreak || firestoreData.studyStreak || 0,
-                    recentPapers: submissions.slice(0, 3).map(sub => ({
-                        title: sub.title || `Paper ${sub.id}`,
-                        questions: sub.questionsCount || 0,
-                        date: sub.submittedAt?.toDate?.().toISOString().split('T')[0] || new Date().toISOString().split('T')[0]
+                    name: studentName,
+                    taskQuestions: allAssignments.reduce((total, assignment) => {
+                        return total + (assignment.questions?.length || 0);
+                    }, 0),
+                    papersAnalyzed: submissionsData.submissions.length,
+                    mockTests: totalSubmissions, // Using submissions as mock tests for now
+                    studyStreak: 7, // This would need a separate endpoint
+                    recentPapers: submissionsData.submissions.slice(0, 3).map(sub => ({
+                        title: sub.assignmentTitle || `Submission ${sub.id}`,
+                        questions: 0, // Would need question count from assignment
+                        date: sub.submittedAt ? new Date(sub.submittedAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
                     })),
-                    mockTestResults: mockTests.slice(0, 3).map(test => ({
-                        title: test.title || `Mock Test ${test.id}`,
-                        score: `${test.score || 0}/${test.totalPoints || 100} (${Math.round(((test.score || 0) / (test.totalPoints || 100)) * 100)}%)`,
-                        date: test.completedAt?.toDate?.().toISOString().split('T')[0] || new Date().toISOString().split('T')[0]
+                    mockTestResults: allAssignments.filter(a => a.submission).slice(0, 3).map(assignment => ({
+                        title: assignment.title,
+                        score: assignment.submission?.grade || 'Not graded',
+                        date: assignment.submission?.submittedAt ? new Date(assignment.submission.submittedAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
                     })),
-                    studyActivities: generateRecentActivities(firestoreData),
-                    tutorMessage: getPersonalizedTutorMessage(firestoreData, progress)
+                    studyActivities: generateRecentActivities(submissionsData.submissions),
+                    tutorMessage: getPersonalizedTutorMessage(submissionsData.submissions)
                 });
             } else {
-                // New student - initialize with empty data
-                setStudentData({
-                    name: user.displayName || user.email?.split('@')[0] || "Student",
-                    taskQuestions: 0,
-                    papersAnalyzed: 0,
-                    mockTests: 0,
-                    studyStreak: 0,
-                    recentPapers: [],
-                    mockTestResults: [],
-                    studyActivities: [
-                        { title: "Complete your first paper upload", time: "Get started" },
-                        { title: "Take your first mock test", time: "Ready when you are" }
-                    ],
-                    tutorMessage: `Welcome! I'm your AI tutor. Upload your first paper to get started with personalized learning.`
-                });
+                // Fallback for new students
+                setDefaultStudentData();
             }
         } catch (err) {
-            console.error('Error fetching student data from Firestore:', err);
-            // Fallback to default data
-            const studentName = user.displayName || user.email?.split('@')[0] || "Student";
-            setStudentData({
-                name: studentName,
-                taskQuestions: 0,
-                papersAnalyzed: 0,
-                mockTests: 0,
-                studyStreak: 0,
-                recentPapers: [],
-                mockTestResults: [],
-                studyActivities: [
-                    { title: "Complete your first paper upload", time: "Get started" },
-                    { title: "Take your first mock test", time: "Ready when you are" }
-                ],
-                tutorMessage: `Welcome ${studentName}! Upload your first paper to begin your learning journey.`
-            });
+            console.error('Error fetching student data:', err);
+            setDefaultStudentData();
         }
     };
 
+// Helper function for fallback data
+    const setDefaultStudentData = () => {
+        const studentName = user.displayName || user.email?.split('@')[0] || "Student";
+        setStudentData({
+            name: studentName,
+            taskQuestions: 0,
+            papersAnalyzed: 0,
+            mockTests: 0,
+            studyStreak: 0,
+            recentPapers: [],
+            mockTestResults: [],
+            studyActivities: [
+                { title: "Complete your first paper upload", time: "Get started" },
+                { title: "Take your first mock test", time: "Ready when you are" }
+            ],
+            tutorMessage: `Welcome ${studentName}! Upload your first paper to begin your learning journey.`
+        });
+    };
+
 // Helper function to generate recent activities
-    const generateRecentActivities = (firestoreData) => {
+    const generateRecentActivities = (submissions) => {
         const activities = [];
         const now = new Date();
 
-        // Add mock test activities
-        const recentTests = (firestoreData.mockTests || []).slice(0, 2);
-        recentTests.forEach(test => {
-            const testDate = test.completedAt?.toDate?.() || now;
-            const daysAgo = Math.floor((now - testDate) / (1000 * 60 * 60 * 24));
-            activities.push({
-                title: `Completed ${test.title || 'a mock test'}`,
-                time: daysAgo === 0 ? 'Today' : daysAgo === 1 ? 'Yesterday' : `${daysAgo} days ago`
-            });
-        });
-
         // Add submission activities
-        const recentSubmissions = (firestoreData.submissions || []).slice(0, 2);
+        const recentSubmissions = submissions.slice(0, 3);
         recentSubmissions.forEach(sub => {
-            const subDate = sub.submittedAt?.toDate?.() || now;
+            const subDate = sub.submittedAt ? new Date(sub.submittedAt) : now;
             const daysAgo = Math.floor((now - subDate) / (1000 * 60 * 60 * 24));
             activities.push({
-                title: `Uploaded ${sub.title || 'a paper'}`,
+                title: `Submitted ${sub.assignmentTitle || 'an assignment'}`,
                 time: daysAgo === 0 ? 'Today' : daysAgo === 1 ? 'Yesterday' : `${daysAgo} days ago`
             });
         });
@@ -189,8 +209,8 @@ const StudentDashboard = () => {
         // Fill with default activities if needed
         if (activities.length === 0) {
             activities.push(
-                { title: "Complete your first paper upload", time: "Get started" },
-                { title: "Take your first mock test", time: "Ready when you are" }
+                { title: "Complete your first assignment", time: "Get started" },
+                { title: "Check for new assignments", time: "Ready when you are" }
             );
         }
 

@@ -120,12 +120,6 @@ const TeacherDashboard = () => {
 
     const teacherData = {
         name: user?.displayName || user?.email?.split('@')[0] || "Teacher",
-        classes: [
-            { name: "Mathematics 101", students: 32, papers: 8 },
-            { name: "Physics 201", students: 28, papers: 6 },
-            { name: "Advanced Calculus", students: 24, papers: 10 },
-            { name: "Statistics", students: 35, papers: 5 }
-        ],
         recentPapers: [
             { title: "Mathematics Final Exam 2024", questions: 45, status: "Published", students: 32, date: "2024-01-15" },
             { title: "Physics Midterm Draft", questions: 32, status: "Draft", students: 0, date: "2024-01-14" },
@@ -143,13 +137,8 @@ const TeacherDashboard = () => {
             { action: "Uploaded question bank for Statistics", details: "50 new questions", time: "2 days ago" },
             { action: "Used AI to generate calculus questions", details: "Derivatives topic", time: "3 days ago" }
         ],
-        upcomingTasks: [
-            "Grade Physics Midterm Papers",
-            "Create Mathematics Quiz",
-            "Review Student Progress Reports",
-            "Prepare Final Exam Questions"
-        ],
-        assistantMessage: "I can help you create 20 calculus questions focusing on derivatives based on your recent syllabus."
+
+        assistantMessage: "I can help you create questions focusing your recent syllabus."
     };
 
     const handleTabChange = (event, newValue) => {
@@ -297,33 +286,6 @@ const TeacherDashboard = () => {
                 <Grid container spacing={3}>
                     {/* Left Column */}
                     <Grid item xs={12} md={8}>
-                        {/* Class Overview */}
-                        <Card sx={{ mb: 3, borderRadius: 3, border: '1px solid #e0e0e0' }}>
-                            <CardContent>
-                                <Typography variant="h6" gutterBottom>
-                                    Class Overview
-                                </Typography>
-                                <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                                    Performance summary across all your classes
-                                </Typography>
-                                <Grid container spacing={2}>
-                                    {teacherData.classes.map((cls, index) => (
-                                        <Grid item xs={12} sm={6} key={index}>
-                                            <Card variant="outlined" sx={{ borderRadius: 3 }}>
-                                                <CardContent>
-                                                    <Typography variant="subtitle1" gutterBottom>
-                                                        {cls.name}
-                                                    </Typography>
-                                                    <Typography variant="body2" color="text.secondary">
-                                                        {cls.students} students • {cls.papers} papers
-                                                    </Typography>
-                                                </CardContent>
-                                            </Card>
-                                        </Grid>
-                                    ))}
-                                </Grid>
-                            </CardContent>
-                        </Card>
 
                         {/* Activity Tabs */}
                         <Paper sx={{ mb: 3, borderRadius: 3, overflow: 'hidden' }}>
