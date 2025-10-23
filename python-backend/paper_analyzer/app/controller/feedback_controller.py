@@ -15,7 +15,7 @@ async def get_all_feedbacks(userid:Optional[str] = None):
         return f"Error getting feedback {error}"
 
 @router.get("/feedbacks/filter")
-async def get_all_feedback_for_subject(userid:Optional[str] = None ,subject:str):
+async def get_all_feedback_for_subject(userid:Optional[str] = None ,subject:str=""):
     try:
         return get_all_feedback_subect_wise(userid,subject)
     except Exception as error:
