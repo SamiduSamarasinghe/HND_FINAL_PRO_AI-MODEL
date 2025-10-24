@@ -48,6 +48,7 @@ const TeacherViewSubmissions = () => {
     const [feedback, setFeedback] = useState('');
     const [grading, setGrading] = useState(false);
     const [error, setError] = useState('');
+    const [success, setSuccess] = useState('');
 
     // Authentication check
     useEffect(() => {
@@ -128,7 +129,7 @@ const TeacherViewSubmissions = () => {
                 const data = await response.json();
                 setSubmissions(data.submissions || []);
                 setSelectedAssignment(data.assignment);
-                console.log('📥 Submissions received:', data.submissions);
+                console.log('Submissions received:', data.submissions);
             } else {
                 throw new Error('Failed to fetch submissions');
             }
@@ -144,7 +145,7 @@ const TeacherViewSubmissions = () => {
         if (!user?.uid) return;
 
         try {
-            console.log('📥 Downloading submission:', submission.id);
+            console.log('Downloading submission:', submission.id);
             const response = await fetch(`http://localhost:8088/api/v1/teacher/download-pdf/${submission.id}?teacher_id=${user.uid}`);
             if (response.ok) {
                 const data = await response.json();
@@ -184,7 +185,7 @@ const TeacherViewSubmissions = () => {
 
         try {
             setGrading(true);
-            const response = await fetch('http://localhost:8088/api/v1/teacher/grade-submission', {
+            const response = await fetch(`http://localhost:8088/api/v1/teacher/grade-submission?teacher_id=${user.uid}`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
@@ -193,8 +194,6 @@ const TeacherViewSubmissions = () => {
                     submissionId: selectedSubmission.id,
                     grade: grade,
                     feedback: feedback,
-                    teacher_id: user.uid,
-                    teacher_email: user.email
                 })
             });
 
@@ -206,12 +205,14 @@ const TeacherViewSubmissions = () => {
                 setSelectedSubmission(null);
                 setGrade('');
                 setFeedback('');
+                setSuccess('Grade submitted successfully');
             } else {
-                throw new Error('Grading failed');
+                const errorData = await response.json();
+                throw new Error(errorData.detail || 'Grading failed');
             }
         } catch (err) {
             console.error('Error grading submission:', err);
-            setError('Failed to grade submission');
+            setError(err.message);
         } finally {
             setGrading(false);
         }
