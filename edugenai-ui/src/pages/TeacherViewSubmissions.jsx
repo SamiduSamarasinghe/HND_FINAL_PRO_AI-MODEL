@@ -49,6 +49,8 @@ const TeacherViewSubmissions = () => {
     const [grading, setGrading] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
+    const [achievedGrade, setAchievedGrade] = useState('');
+    const [totalGrade, setTotalGrade] = useState('');
 
     // Authentication check
     useEffect(() => {
@@ -175,13 +177,32 @@ const TeacherViewSubmissions = () => {
 
     const handleGradeSubmission = (submission) => {
         setSelectedSubmission(submission);
-        setGrade(submission.grade || '');
+
+        //Parse exiting grade if available
+        if (submission.grade && submission.grade.includes('/')) {
+            const [achieved, total] = submission.grade.split('/').map(part => part.trim());
+            setAchievedGrade(achieved);
+            setTotalGrade(total);
+        } else {
+            // Default to empty or existing simple grade
+            setAchievedGrade(submission.achievedGrade || submission.grade || '');
+            setTotalGrade(submission.totalGrade || '100'); // Default total to 100
+        }
         setFeedback(submission.teacherFeedback || '');
         setGradingDialogOpen(true);
     };
 
     const submitGrade = async () => {
-        if (!selectedSubmission || !grade || !user?.uid) return;
+        if (!selectedSubmission || !achievedGrade || !totalGrade || !user?.uid) return;
+
+        //Validate grades
+        const achieved = parseInt(achievedGrade);
+        const total = parseInt(totalGrade);
+
+        if (isNaN(achieved) || isNaN(total) || achieved < 0 || total <= 0 || achieved > total) {
+            setError('Please enter valid grades.');
+            return;
+        }
 
         try {
             setGrading(true);
@@ -192,7 +213,8 @@ const TeacherViewSubmissions = () => {
                 },
                 body: JSON.stringify({
                     submissionId: selectedSubmission.id,
-                    grade: grade,
+                    achievedGrade: achieved,
+                    totalGrade: total,
                     feedback: feedback,
                 })
             });
@@ -203,7 +225,8 @@ const TeacherViewSubmissions = () => {
                     await fetchSubmissions(selectedAssignment.id);
                 }
                 setSelectedSubmission(null);
-                setGrade('');
+                setAchievedGrade('');
+                setTotalGrade('');
                 setFeedback('');
                 setSuccess('Grade submitted successfully');
             } else {
@@ -386,6 +409,11 @@ const TeacherViewSubmissions = () => {
                                                     <Typography variant="body2" fontWeight={submission.grade ? "bold" : "normal"}>
                                                         {submission.grade || 'Not graded'}
                                                     </Typography>
+                                                    {submission.achievedGrade && submission.totalGrade && (
+                                                        <Typography variant="caption" color="text.secondary" display="block">
+                                                            {submission.achievedGrade}/{submission.totalGrade}
+                                                        </Typography>
+                                                    )}
                                                 </TableCell>
                                                 <TableCell>
                                                     <Button
@@ -417,13 +445,29 @@ const TeacherViewSubmissions = () => {
                         <Typography variant="body2">
                             Assignment: {selectedAssignment?.title}
                         </Typography>
-                        <TextField
-                            label="Grade *"
-                            value={grade}
-                            onChange={(e) => setGrade(e.target.value)}
-                            placeholder="e.g., 85/100, A, Pass"
-                            fullWidth
-                        />
+                        <Stack direction="row" spacing={2}>
+                            <TextField
+                                label="Achieved Grade *"
+                                value={achievedGrade}
+                                onChange={(e) => setAchievedGrade(e.target.value)}
+                                placeholder="e.g., 85"
+                                type="number"
+                                inputProps={{ min: 0, max: totalGrade || 100 }}
+                                fullWidth
+                            />
+                            <TextField
+                                label="Total Grade *"
+                                value={totalGrade}
+                                onChange={(e) => setTotalGrade(e.target.value)}
+                                placeholder="e.g., 100"
+                                type="number"
+                                inputProps={{ min: 1 }}
+                                fullWidth
+                            />
+                        </Stack>
+                        <Typography variant="body2" color="primary" sx={{ textAlign: 'center' }}>
+                            Grade: {achievedGrade && totalGrade ? `${achievedGrade}/${totalGrade}` : '--/--'}
+                        </Typography>
                         <TextField
                             label="Feedback"
                             value={feedback}
@@ -440,7 +484,7 @@ const TeacherViewSubmissions = () => {
                     <Button
                         variant="contained"
                         onClick={submitGrade}
-                        disabled={!grade || grading}
+                        disabled={!achievedGrade || !totalGrade || grading}
                     >
                         {grading ? 'Grading...' : 'Submit Grade'}
                     </Button>

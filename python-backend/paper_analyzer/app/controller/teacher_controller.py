@@ -337,11 +337,24 @@ async def grade_submission(grade_data: dict, current_user: str = Depends(get_cur
     """Grade a submission"""
     try:
         submission_id = grade_data.get("submissionId")
-        grade = grade_data.get("grade")
+        achieved_grade = grade_data.get("achievedGrade")
+        total_grade = grade_data.get("totalGrade")
         feedback = grade_data.get("feedback", "")
 
-        if not submission_id or grade is None:
-            raise HTTPException(status_code=400, detail="Submission ID and grade are required")
+        if not submission_id or achieved_grade is None or total_grade is None:
+            raise HTTPException(status_code=400, detail="Submission ID, achieved grade, and total grade are required")
+
+        #Validate grades
+        try:
+            achieved_grade = int(achieved_grade)
+            total_grade = int(total_grade)
+            if achieved_grade < 0 or total_grade <= 0 or achieved_grade > total_grade:
+                raise ValueError("Invalid grade values")
+
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Grades must be valid positive")
+
+
 
         submission_ref = __db.collection("submissions").document(submission_id)
         submission_doc = submission_ref.get()
@@ -351,7 +364,9 @@ async def grade_submission(grade_data: dict, current_user: str = Depends(get_cur
 
         # Update submission
         updates = {
-            "grade": grade,
+            "achievedGrade": achieved_grade,
+            "totalGrade": total_grade,
+            "grade": f"{achieved_grade}/{total_grade}",
             "teacherFeedback": feedback,
             "status": "graded",
             "gradedAt": datetime.now().isoformat()
@@ -362,7 +377,7 @@ async def grade_submission(grade_data: dict, current_user: str = Depends(get_cur
         return {
             "message": "Submission graded successfully",
             "submission_id": submission_id,
-            "grade": grade
+            "grade": f"{achieved_grade}/{total_grade}"
         }
 
     except HTTPException:

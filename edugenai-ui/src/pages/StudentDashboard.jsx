@@ -595,35 +595,6 @@ const StudentDashboard = () => {
                                 </Stack>
                             </CardContent>
                         </Card>
-
-                        {/* AI Tutor */}
-                        <Card sx={{
-                            borderRadius: 2,
-                            border: '1px solid #e0e0e0',
-                            '&:hover': { boxShadow: 1 }
-                        }}>
-                            <CardContent>
-                                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                                    <BrainIcon sx={{ mr: 1, color: 'primary.main' }} />
-                                    <Typography variant="h6">AI Tutor</Typography>
-                                </Box>
-                                <Typography variant="body1" sx={{ mb: 3 }}>
-                                    {studentData.tutorMessage}
-                                </Typography>
-                                <Button
-                                    variant="contained"
-                                    fullWidth
-                                    startIcon={<TutorIcon />}
-                                    sx={{
-                                        py: 1.5,
-                                        borderRadius: 2,
-                                        textTransform: 'none'
-                                    }}
-                                >
-                                    Continue Conversation
-                                </Button>
-                            </CardContent>
-                        </Card>
                     </Grid>
                 </Grid>
             </Box>

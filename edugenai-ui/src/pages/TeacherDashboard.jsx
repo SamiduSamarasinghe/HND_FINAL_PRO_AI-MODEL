@@ -476,35 +476,6 @@ const TeacherDashboard = () => {
                                 </Stack>
                             </CardContent>
                         </Card>
-
-                        {/* AI Assistant */}
-                        <Card sx={{
-                            borderRadius: 3,
-                            border: '1px solid #e0e0e0',
-                            '&:hover': { boxShadow: 1 }
-                        }}>
-                            <CardContent>
-                                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                                    <BrainIcon sx={{ mr: 1, color: 'primary.main' }} />
-                                    <Typography variant="h6">AI Assistant</Typography>
-                                </Box>
-                                <Typography variant="body1" sx={{ mb: 3 }}>
-                                    {teacherData.assistantMessage}
-                                </Typography>
-                                <Button
-                                    variant="contained"
-                                    fullWidth
-                                    startIcon={<AssistantIcon />}
-                                    sx={{
-                                        py: 1.5,
-                                        borderRadius: 3,
-                                        textTransform: 'none'
-                                    }}
-                                >
-                                    Get AI Suggestions
-                                </Button>
-                            </CardContent>
-                        </Card>
                     </Grid>
                 </Grid>
             </Box>
