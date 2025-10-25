@@ -28,7 +28,7 @@ import {
     Block as BlockIcon,
     Description as TextIcon,
     QuestionAnswer as QuestionBankIcon,
-    PictureAsPdf as PdfIcon
+    PictureAsPdf as PdfIcon,
 } from '@mui/icons-material';
 
 const StudentAssignments = () => {
@@ -197,11 +197,11 @@ const StudentAssignments = () => {
                     size="small"
                 />
             );
-        } else if (assignment.is_late) {
+        } else if (assignment.is_late && !assignment.submission) {
             return (
                 <Chip
                     icon={<BlockIcon />}
-                    label="Late"
+                    label="Overdue"
                     color="error"
                     size="small"
                 />
@@ -285,13 +285,18 @@ const StudentAssignments = () => {
         }
     };
 
-    const getDueDateText = (dueDate) => {
+    const getDueDateText = (dueDate, isLate, hasSubmission) => {
         const due = new Date(dueDate);
         const now = new Date();
         const diffTime = due - now;
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-        if (diffDays < 0) return `Due ${Math.abs(diffDays)} days ago`;
+        if (hasSubmission) {
+            return `Submitted • Due was ${due.toLocaleDateString()}`;
+        }
+        if (diffDays < 0 && !hasSubmission) {
+            return `Overdue by ${Math.abs(diffDays)} days`;
+        }
         if (diffDays === 0) return 'Due today';
         if (diffDays === 1) return 'Due tomorrow';
         return `Due in ${diffDays} days`;
@@ -377,7 +382,7 @@ const StudentAssignments = () => {
                                         <Stack direction="row" spacing={1} sx={{ mt: 2 }} alignItems="center">
                                             {getStatusChip(assignment)}
                                             <Typography variant="body2" color="text.secondary">
-                                                {getDueDateText(assignment.dueDate)}
+                                                {getDueDateText(assignment.dueDate, assignment.is_late, assignment.submission)}
                                             </Typography>
                                             <Typography variant="body2" color="text.secondary">
                                                 Due: {new Date(assignment.dueDate).toLocaleDateString()}
@@ -403,19 +408,23 @@ const StudentAssignments = () => {
                                         )}
                                     </Box>
                                     <Box>
-                                        {assignment.can_submit && (
+                                        {(assignment.can_submit || (assignment.is_late && !assignment.submission)) && (
                                             <Button
-                                                variant="contained"
+                                                variant={assignment.is_late && !assignment.submission ? "outlined" : "contained"}
                                                 startIcon={<UploadIcon />}
                                                 onClick={() => handleFileSelect(assignment)}
+                                                color={assignment.is_late && !assignment.submission ? "warning" : "primary"}
                                             >
-                                                Submit PDF
+                                                {assignment.is_late && !assignment.submission ? "Submit Late" : "Submit PDF"}
                                             </Button>
                                         )}
-                                        {assignment.is_late && !assignment.submission && (
-                                            <Button variant="outlined" disabled>
-                                                Submission Closed
-                                            </Button>
+                                        {assignment.submission && (
+                                            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                                                Submitted on {new Date(assignment.submission.submittedAt).toLocaleDateString()}
+                                                {assignment.submission.status === 'graded' && assignment.submission.grade && (
+                                                    <span> • Grade: {assignment.submission.grade}</span>
+                                                )}
+                                            </Typography>
                                         )}
                                     </Box>
                                 </Stack>
@@ -429,12 +438,25 @@ const StudentAssignments = () => {
             <Dialog open={uploadDialogOpen} onClose={() => setUploadDialogOpen(false)} maxWidth="sm" fullWidth>
                 <DialogTitle>
                     Submit Assignment: {selectedAssignment?.title}
+                    {selectedAssignment?.is_late && !selectedAssignment?.submission && (
+                        <Chip
+                            label="Late Submission"
+                            color="warning"
+                            size="small"
+                            sx={{ ml: 1 }}
+                        />
+                    )}
                 </DialogTitle>
                 <DialogContent>
                     <Stack spacing={2} sx={{ mt: 1 }}>
                         <Typography variant="body2">
                             Due Date: {selectedAssignment && new Date(selectedAssignment.dueDate).toLocaleDateString()}
                         </Typography>
+                        {selectedAssignment?.is_late && !selectedAssignment?.submission && (
+                            <Alert severity="warning">
+                                This assignment is overdue. Late submissions may receive reduced marks.
+                            </Alert>
+                        )}
                         <Typography variant="body2" color="text.secondary">
                             Class: {selectedAssignment?.className}
                         </Typography>
@@ -465,8 +487,10 @@ const StudentAssignments = () => {
                         variant="contained"
                         onClick={handleSubmitAssignment}
                         disabled={!selectedFile || uploading}
+                        color={selectedAssignment?.is_late && !selectedAssignment?.submission ? "warning" : "primary"}
                     >
-                        {uploading ? 'Submitting...' : 'Submit Assignment'}
+                        {uploading ? 'Submitting...' :
+                            selectedAssignment?.is_late && !selectedAssignment?.submission ? 'Submit Late' : 'Submit Assignment'}
                     </Button>
                 </DialogActions>
             </Dialog>
