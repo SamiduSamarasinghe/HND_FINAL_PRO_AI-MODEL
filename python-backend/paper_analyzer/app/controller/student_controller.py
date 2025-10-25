@@ -66,13 +66,14 @@ async def get_class_assignments(class_id: str, student_email: str):
                 submission_data["submissionId"] = sub_doc.id
                 break
 
-            # Check if assignment is late
+            # Check if assignment is late - FIXED DATETIME COMPARISON
             is_late = False
-            can_submit = False
+            can_submit = True  # Always allow submission
 
             try:
                 due_date_str = assignment_data.get("dueDate", "")
                 if due_date_str:
+                    # Parse due date and make it timezone-aware
                     if 'Z' in due_date_str:
                         due_date = datetime.fromisoformat(due_date_str.replace('Z', '+00:00'))
                     else:
@@ -82,7 +83,8 @@ async def get_class_assignments(class_id: str, student_email: str):
 
                     current_time = datetime.now(timezone.utc)
                     is_late = current_time > due_date
-                    can_submit = not is_late and not submission_data
+                    # Always allow submission, even if late
+                    can_submit = not submission_data
             except Exception as date_error:
                 print(f"Date parsing error: {date_error}")
                 can_submit = not submission_data
@@ -111,7 +113,7 @@ async def submit_pdf_assignment(
 ):
     """Submit PDF assignment - Store PDF as base64 in Firestore"""
     try:
-        print(f"Student {student_email} submitting assignment {assignment_id}")
+        print(f"📤 Student {student_email} submitting assignment {assignment_id}")
 
         # Check if assignment exists
         assignment_ref = __db.collection("assignments").document(assignment_id)
@@ -135,9 +137,17 @@ async def submit_pdf_assignment(
         file_content = await file.read()
         pdf_base64 = base64.b64encode(file_content).decode('utf-8')
 
-        # Check if submission is late
+        # Check if submission is late - FIXED DATETIME COMPARISON
         current_time = datetime.now(timezone.utc)
-        due_date = datetime.fromisoformat(due_date_str.replace('Z', '+00:00'))
+
+        # Parse due date and make it timezone-aware
+        if 'Z' in due_date_str:
+            due_date = datetime.fromisoformat(due_date_str.replace('Z', '+00:00'))
+        else:
+            due_date = datetime.fromisoformat(due_date_str)
+            if due_date.tzinfo is None:
+                due_date = due_date.replace(tzinfo=timezone.utc)
+
         is_late = current_time > due_date
         days_late = (current_time - due_date).days if is_late else 0
 
@@ -171,7 +181,7 @@ async def submit_pdf_assignment(
             notification_ref = __db.collection("student_notifications").document(notification_doc.id)
             notification_ref.update({"isSeen": True})
 
-        print(f"Assignment submitted successfully! Late: {is_late}")
+        print(f"✅ Assignment submitted successfully! Late: {is_late}")
 
         return {
             "message": "Assignment submitted successfully" + (" (Late)" if is_late else ""),
@@ -183,7 +193,7 @@ async def submit_pdf_assignment(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error submitting assignment: {str(e)}")
+        print(f"❌ Error submitting assignment: {str(e)}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Failed to submit assignment: {str(e)}")
 

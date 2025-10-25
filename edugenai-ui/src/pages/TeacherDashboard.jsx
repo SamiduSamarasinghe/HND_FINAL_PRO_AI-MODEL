@@ -221,73 +221,50 @@ const TeacherDashboard = () => {
     const fetchStudentsNeedingAttention = async () => {
         try {
             const teacherId = user?.uid;
+            if (!teacherId) return;
 
-            //First get all classes
-            const classesResponse = await await fetch(`http://localhost:8088/api/v1/teacher/classes?teacher_id=${teacherId}`);
-            if (!classesResponse.ok) return;
+            // First get all classes
+            const classesResponse = await fetch(`http://localhost:8088/api/v1/teacher/classes?teacher_id=${teacherId}`);
+            if (!classesResponse.ok) {
+                console.error('Failed to fetch classes');
+                return;
+            }
 
             const classesData = await classesResponse.json();
             const classesList = classesData.classes || [];
 
             const attentionList = [];
 
-            //For each class, check student submissions
+            // For each class, get late and missing submissions
             for (const classItem of classesList) {
-                // Get assignments for this class
-                const assignmentsResponse = await fetch(`http://localhost:8088/api/v1/teacher/assignments/${classItem.id}?teacher_id=${teacherId}`);
-                if (!assignmentsResponse.ok) continue;
+                try {
+                    const lateSubmissionsResponse = await fetch(`http://localhost:8088/api/v1/teacher/late-submissions/${classItem.id}?teacher_id=${teacherId}`);
+                    if (!lateSubmissionsResponse.ok) {
+                        console.error(`Failed to fetch late submissions for class ${classItem.id}: ${lateSubmissionsResponse.status}`);
+                        continue;
+                    }
 
-                const assignmentsData = await assignmentsResponse.json();
-                const assignments = assignmentsData.assignments || [];
+                    const lateSubmissionsData = await lateSubmissionsResponse.json();
+                    const lateMissingSubmissions = lateSubmissionsData.late_missing_submissions || [];
 
-                // For each assignment, check submissions
-                for (const assignment of assignments) {
-                    const submissionsResponse = await fetch(`http://localhost:8088/api/v1/teacher/submissions/${assignment.id}?teacher_id=${teacherId}`);
-                    if (!submissionsResponse.ok) continue;
-
-                    const submissionsData = await submissionsResponse.json();
-                    const submissions = submissionsData.submissions || [];
-
-                    // Find students who haven't submitted (late)
-                    const classStudents = classItem.students || [];
-                    const submittedStudentEmails = submissions.map(s => s.studentEmail);
-
-                    const lateStudents = classStudents.filter(student =>
-                        !submittedStudentEmails.includes(student.email) &&
-                        new Date(assignment.dueDate) < new Date()
-                    );
-
-                    // Add late students to attention list
-                    lateStudents.forEach(student => {
-                        attentionList.push({
-                            type: 'late_submission',
-                            studentName: student.name,
-                            studentEmail: student.email,
-                            assignmentTitle: assignment.title,
-                            className: classItem.name,
-                            dueDate: assignment.dueDate,
-                            daysLate: Math.floor((new Date() - new Date(assignment.dueDate)) / (1000 * 60 * 60 * 24))
-                        });
-                    });
-
-                    // Find ungraded submissions
-                    const ungradedSubmissions = submissions.filter(sub => !sub.grade && sub.status !== 'graded');
-                    ungradedSubmissions.forEach(submission => {
-                        attentionList.push({
-                            type: 'ungraded',
-                            studentName: submission.studentName,
-                            studentEmail: submission.studentEmail,
-                            assignmentTitle: assignment.title,
-                            className: classItem.name,
-                            submittedAt: submission.submittedAt,
-                            submissionId: submission.id
-                        });
-                    });
+                    // Add to attention list
+                    attentionList.push(...lateMissingSubmissions);
+                } catch (classError) {
+                    console.error(`Error fetching late submissions for class ${classItem.name}:`, classError);
                 }
             }
 
-            // Limit to top 6 most urgent items
-            setStudentsNeedingAttention(attentionList.slice(0, 6));
+            // Limit to top 6 most urgent items (prioritize missing submissions, then by days late)
+            const sortedList = attentionList.sort((a, b) => {
+                // Missing submissions first
+                if (a.type === 'missing_submission' && b.type !== 'missing_submission') return -1;
+                if (a.type !== 'missing_submission' && b.type === 'missing_submission') return 1;
+
+                // Then by days late (more days first)
+                return b.daysLate - a.daysLate;
+            }).slice(0, 6);
+
+            setStudentsNeedingAttention(sortedList);
 
         } catch (error) {
             console.error('Error fetching students needing attention:', error);
@@ -402,6 +379,41 @@ const TeacherDashboard = () => {
             console.error('Error fetching to-do and activity:', error);
             setToDoItems([]);
             setRecentActivity([]);
+        }
+    };
+
+    const handleSendReminder = async (studentItem) => {
+        try {
+            const teacherId = user?.uid;
+            if (!teacherId) return;
+
+            // For now, using a simple prompt for reminder message
+            const reminderMessage = prompt('Enter reminder message:', `Please submit your assignment "${studentItem.assignmentTitle}" as soon as possible.`);
+
+            if (!reminderMessage) return;
+
+            const response = await fetch(`http://localhost:8088/api/v1/teacher/send-reminder?teacher_id=${teacherId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    studentEmail: studentItem.studentEmail,
+                    assignmentId: studentItem.assignmentId,
+                    message: reminderMessage
+                })
+            });
+
+            if (response.ok) {
+                alert('Reminder sent successfully!');
+                // Refresh the list
+                fetchStudentsNeedingAttention();
+            } else {
+                throw new Error('Failed to send reminder');
+            }
+        } catch (error) {
+            console.error('Error sending reminder:', error);
+            alert('Failed to send reminder');
         }
     };
 
@@ -621,7 +633,7 @@ const TeacherDashboard = () => {
                                                             <Button
                                                                 variant="outlined"
                                                                 size="small"
-                                                                onClick={() => navigate('/teacher/submissions')}
+                                                                onClick={() => navigate(`/teacher/submissions?assignmentId=${assignment.id}`)}
                                                                 sx={{ mr: 1 }}
                                                             >
                                                                 View Submissions
@@ -637,7 +649,7 @@ const TeacherDashboard = () => {
                                 {activeTab === 'studentPerformance' && (
                                     <>
                                         <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                                            Students needing your attention
+                                            Students needing your attention - Late and missing submissions
                                         </Typography>
                                         <List>
                                             {studentsNeedingAttention.length === 0 ? (
@@ -656,44 +668,71 @@ const TeacherDashboard = () => {
                                                         }}
                                                     >
                                                         <Box sx={{ width: '100%' }}>
-                                                            {/* Primary content without nested divs */}
+                                                            {/* Header with student info and status */}
                                                             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
-                                                                <Typography variant="subtitle1" fontWeight="medium" component="div">
-                                                                    {item.studentName}
-                                                                </Typography>
-                                                                <Chip
-                                                                    label={item.type === 'late_submission' ? 'Late Submission' : 'Needs Grading'}
-                                                                    color={item.type === 'late_submission' ? 'error' : 'warning'}
-                                                                    size="small"
-                                                                />
+                                                                <Box>
+                                                                    <Typography variant="subtitle1" fontWeight="medium" component="div">
+                                                                        {item.studentName}
+                                                                    </Typography>
+                                                                    <Typography variant="body2" color="text.secondary" component="div">
+                                                                        {item.studentEmail}
+                                                                    </Typography>
+                                                                </Box>
+                                                                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 0.5 }}>
+                                                                    <Chip
+                                                                        label={item.type === 'late_submission' ? 'Late Submission' : 'Missing Submission'}
+                                                                        color={item.type === 'late_submission' ? 'warning' : 'error'}
+                                                                        size="small"
+                                                                    />
+                                                                    {item.reminderCount > 0 && (
+                                                                        <Chip
+                                                                            label={`${item.reminderCount} reminder${item.reminderCount > 1 ? 's' : ''}`}
+                                                                            variant="outlined"
+                                                                            size="small"
+                                                                            color="secondary"
+                                                                        />
+                                                                    )}
+                                                                </Box>
                                                             </Box>
 
-                                                            {/* Secondary content as separate Typography components */}
+                                                            {/* Assignment details */}
                                                             <Typography variant="body2" component="div" sx={{ mb: 1 }}>
-                                                                {item.assignmentTitle} • {item.className}
+                                                                <strong>{item.assignmentTitle}</strong> • {item.className}
                                                             </Typography>
 
                                                             <Typography variant="body2" color="text.secondary" component="div" sx={{ mb: 2 }}>
+                                                                Due: {new Date(item.dueDate).toLocaleDateString()} •
                                                                 {item.type === 'late_submission'
-                                                                    ? `Due ${item.daysLate} days ago`
-                                                                    : `Submitted ${new Date(item.submittedAt).toLocaleDateString()}`
+                                                                    ? ` Submitted ${item.daysLate} day${item.daysLate > 1 ? 's' : ''} late`
+                                                                    : ` ${item.daysLate} day${item.daysLate > 1 ? 's' : ''} overdue`
                                                                 }
                                                             </Typography>
 
                                                             {/* Action buttons */}
-                                                            <Box sx={{ mt: 1 }}>
+                                                            <Box sx={{ mt: 1, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                                                                {item.type === 'late_submission' ? (
+                                                                    <Button
+                                                                        variant="contained"
+                                                                        size="small"
+                                                                        onClick={() => navigate(`/teacher/submissions?assignmentId=${item.assignmentId}`)}
+                                                                        sx={{ mr: 1 }}
+                                                                    >
+                                                                        Grade Submission
+                                                                    </Button>
+                                                                ) : (
+                                                                    <Button
+                                                                        variant="outlined"
+                                                                        size="small"
+                                                                        onClick={() => handleSendReminder(item)}
+                                                                        sx={{ mr: 1 }}
+                                                                    >
+                                                                        Send Reminder
+                                                                    </Button>
+                                                                )}
                                                                 <Button
                                                                     variant="outlined"
                                                                     size="small"
-                                                                    onClick={() => navigate('/teacher/submissions')}
-                                                                    sx={{ mr: 1 }}
-                                                                >
-                                                                    {item.type === 'late_submission' ? 'Send Reminder' : 'Grade Now'}
-                                                                </Button>
-                                                                <Button
-                                                                    variant="text"
-                                                                    size="small"
-                                                                    onClick={() => navigate('/teacher/submissions')}
+                                                                    onClick={() => navigate(`/teacher/submissions?assignmentId=${item.assignmentId}`)}
                                                                 >
                                                                     View Details
                                                                 </Button>

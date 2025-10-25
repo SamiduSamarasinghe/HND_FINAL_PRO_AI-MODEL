@@ -24,7 +24,6 @@ import {
 import {
     Menu as MenuIcon,
     InsertDriveFile as PaperIcon,
-    Assignment as MockTestIcon,
     QueryStats as AnalyticsIcon,
     School as StudyIcon,
     EmojiEvents as StreakIcon,
@@ -34,7 +33,13 @@ import {
     Create as GenerateIcon,
     Visibility as ViewIcon,
     InsertDriveFileOutlined,
-    Logout as LogoutIcon
+    Logout as LogoutIcon,
+    Notifications as NotificationsIcon,
+    Warning as WarningIcon,
+    Info as InfoIcon,
+    CheckCircle as CheckCircleIcon,
+    Assignment as AssignmentIcon,
+    Assignment as MockTestIcon
 } from '@mui/icons-material';
 
 const StudentDashboard = () => {
@@ -97,6 +102,11 @@ const StudentDashboard = () => {
             const studentEmail = user?.email;
             if (!studentEmail) return;
 
+            // Fetch notifications
+            const notificationsResponse = await fetch(`http://localhost:8088/api/v1/student/notifications/${studentEmail}`);
+            const notificationsData = notificationsResponse.ok ? await notificationsResponse.json() : { notifications: [] };
+
+
             // 1. Fetch student's enrolled classes
             const classesResponse = await fetch('http://localhost:8088/api/v1/student/classes', {
                 method: 'POST',
@@ -146,24 +156,17 @@ const StudentDashboard = () => {
                         return total + (assignment.questions?.length || 0);
                     }, 0),
                     papersAnalyzed: submissionsData.submissions.length,
-                    mockTests: totalSubmissions, // Using submissions as mock tests for now
-                    studyStreak: 7, // This would need a separate endpoint
+                    mockTests: totalSubmissions,
+                    studyStreak: 7,
                     recentPapers: submissionsData.submissions.slice(0, 3).map(sub => ({
                         title: sub.assignmentTitle || `Submission ${sub.id}`,
-                        questions: 0, // Would need question count from assignment
+                        questions: 0,
                         date: sub.submittedAt ? new Date(sub.submittedAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
                     })),
-                    mockTestResults: allAssignments.filter(a => a.submission).slice(0, 3).map(assignment => ({
-                        title: assignment.title,
-                        score: assignment.submission?.grade || 'Not graded',
-                        date: assignment.submission?.submittedAt ? new Date(assignment.submission.submittedAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
-                    })),
+                    notifications: notificationsData.notifications,
                     studyActivities: generateRecentActivities(submissionsData.submissions),
                     tutorMessage: getPersonalizedTutorMessage(submissionsData.submissions)
                 });
-            } else {
-                // Fallback for new students
-                setDefaultStudentData();
             }
         } catch (err) {
             console.error('Error fetching student data:', err);
@@ -181,6 +184,7 @@ const StudentDashboard = () => {
             mockTests: 0,
             studyStreak: 0,
             recentPapers: [],
+            notifications: [],
             mockTestResults: [],
             studyActivities: [
                 { title: "Complete your first paper upload", time: "Get started" },
@@ -378,9 +382,9 @@ const StudentDashboard = () => {
                                     sx={{ py: 2 }}
                                 />
                                 <Tab
-                                    value="mockTests"
-                                    label="Mock Tests"
-                                    icon={<MockTestIcon />}
+                                    value="notifications"
+                                    label="Notifications"
+                                    icon={<NotificationsIcon />}
                                     iconPosition="start"
                                     sx={{ py: 2 }}
                                 />
@@ -429,35 +433,69 @@ const StudentDashboard = () => {
                                     </>
                                 )}
 
-                                {activeTab === 'mockTests' && (
+                                {activeTab === 'notifications' && (
                                     <>
                                         <Typography variant="h6" gutterBottom>
-                                            Recent Mock Tests
+                                            Notifications
                                         </Typography>
                                         <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                                            Your latest practice test results
+                                            Your recent alerts and updates
                                         </Typography>
-                                        <List>
-                                            {studentData.mockTestResults.map((test, index) => (
-                                                <ListItem
-                                                    key={index}
-                                                    sx={{
-                                                        border: '1px solid #e0e0e0',
-                                                        borderRadius: 2,
-                                                        mb: 1,
-                                                        '&:hover': { bgcolor: 'action.hover' }
-                                                    }}
-                                                >
-                                                    <ListItemIcon>
-                                                        <MockTestIcon sx={{ color: 'primary.main' }} />
-                                                    </ListItemIcon>
-                                                    <ListItemText
-                                                        primary={test.title}
-                                                        secondary={`${test.score} • Completed on ${test.date}`}
-                                                    />
-                                                </ListItem>
-                                            ))}
-                                        </List>
+                                        {notificationCount === 0 ? (
+                                            <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 3 }}>
+                                                No new notifications
+                                            </Typography>
+                                        ) : (
+                                            <List>
+                                                {studentData.notifications?.map((notification, index) => (
+                                                    <ListItem
+                                                        key={index}
+                                                        sx={{
+                                                            border: '1px solid #e0e0e0',
+                                                            borderRadius: 2,
+                                                            mb: 1,
+                                                            '&:hover': { bgcolor: 'action.hover' },
+                                                            borderLeft: `4px solid ${
+                                                                notification.type === 'new_assignment' ? '#1976d2' :
+                                                                    notification.type === 'graded' ? '#2e7d32' :
+                                                                        notification.type === 'reminder' ? '#d32f2f' : '#ed6c02'
+                                                            }`
+                                                        }}
+                                                    >
+                                                        <ListItemIcon>
+                                                            {notification.type === 'new_assignment' && <AssignmentIcon sx={{ color: '#1976d2' }} />}
+                                                            {notification.type === 'graded' && <CheckCircleIcon sx={{ color: '#2e7d32' }} />}
+                                                            {notification.type === 'reminder' && <WarningIcon sx={{ color: '#d32f2f' }} />}
+                                                            {!['new_assignment', 'graded', 'reminder'].includes(notification.type) && <InfoIcon sx={{ color: '#ed6c02' }} />}
+                                                        </ListItemIcon>
+                                                        <ListItemText
+                                                            primary={
+                                                                <Typography variant="subtitle1" fontWeight="medium">
+                                                                    {notification.type === 'new_assignment' ? 'New Assignment' :
+                                                                        notification.type === 'graded' ? 'Assignment Graded' :
+                                                                            notification.type === 'reminder' ? 'Reminder' : 'Notification'}
+                                                                </Typography>
+                                                            }
+                                                            secondary={
+                                                                <Box>
+                                                                    <Typography variant="body2">
+                                                                        {notification.assignmentTitle || notification.message}
+                                                                    </Typography>
+                                                                    <Typography variant="caption" color="text.secondary">
+                                                                        {new Date(notification.createdAt).toLocaleDateString()} at {new Date(notification.createdAt).toLocaleTimeString()}
+                                                                    </Typography>
+                                                                    {notification.message && notification.type !== 'reminder' && (
+                                                                        <Typography variant="body2" sx={{ mt: 0.5 }}>
+                                                                            {notification.message}
+                                                                        </Typography>
+                                                                    )}
+                                                                </Box>
+                                                            }
+                                                        />
+                                                    </ListItem>
+                                                ))}
+                                            </List>
+                                        )}
                                     </>
                                 )}
 

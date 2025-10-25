@@ -111,11 +111,23 @@ const StudentAssignments = () => {
                         const data = await response.json();
                         console.log(`Found ${data.assignments?.length || 0} assignments for class ${classItem.name}`);
 
-                        const assignmentsWithClass = (data.assignments || []).map(assignment => ({
-                            ...assignment,
-                            className: classItem.name,
-                            classSubject: classItem.subject
-                        }));
+                        // Process each assignment to correctly determine late status
+                        const assignmentsWithClass = (data.assignments || []).map(assignment => {
+                            // Check if assignment is actually late (even if API says it's not)
+                            const dueDate = new Date(assignment.dueDate);
+                            const now = new Date();
+                            const isActuallyLate = now > dueDate && !assignment.submission;
+
+                            return {
+                                ...assignment,
+                                className: classItem.name,
+                                classSubject: classItem.subject,
+                                // Override is_late if it's actually past due and not submitted
+                                is_late: assignment.is_late || isActuallyLate,
+                                // Allow submission even if late
+                                can_submit: !assignment.submission
+                            };
+                        });
                         allAssignments.push(...assignmentsWithClass);
                     } else {
                         console.error(`Failed to fetch assignments for class ${classItem.name}: ${response.status}`);
