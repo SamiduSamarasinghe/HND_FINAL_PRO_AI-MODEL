@@ -17,7 +17,8 @@ import {
     Divider,
     Button,
     Stack,
-    CircularProgress
+    CircularProgress,
+    Chip
 } from '@mui/material';
 import {
     Menu as MenuIcon,
@@ -42,12 +43,20 @@ const TeacherDashboard = () => {
     const [dashboardData, setDashboardData] = useState(null);
     const [loading, setLoading] = useState(true);
     const navigate = useNavigate();
-    const { user, userProfile, loading: authLoading, logout } = useAuth()
+    const { user, userProfile, loading: authLoading, logout } = useAuth();
+    const [assignments, setAssignments] = useState([]);
+    const [studentsNeedingAttention, setStudentsNeedingAttention] = useState([]);
+    const [toDoItems, setToDoItems] = useState([]);
+    const [recentActivity, setRecentActivity] = useState([]);
+
 
     //Fetch real dashboard data
     useEffect(() => {
         if (user && userProfile?.role === 'teacher') {
             fetchDashboardData();
+            fetchTeacherAssignments();
+            fetchStudentsNeedingAttention();
+            fetchToDoAndActivity()
         }
     }, [user, userProfile]);
 
@@ -172,6 +181,247 @@ const TeacherDashboard = () => {
             description: "Active in 7 days"
         }
     ];
+
+    //Fetch real assignments
+    const fetchTeacherAssignments = async () => {
+        try {
+            const teacherId = user?.uid;
+            const response = await fetch(`http://localhost:8088/api/v1/teacher/classes?teacher_id=${teacherId}`);
+
+            if (response.ok) {
+                const data = await response.json();
+                const classesList = data.classes || [];
+
+                //Fetch assignments for each class
+                const allAssignments = [];
+                for (const classItem of classesList) {
+                    const assignmentsResponse = await await fetch(`http://localhost:8088/api/v1/teacher/assignments/${classItem.id}?teacher_id=${teacherId}`);
+                    if (assignmentsResponse.ok) {
+                        const assignmentsData = await assignmentsResponse.json();
+                        const assignmentsWithClass = (assignmentsData.assignments || []).map(assignment => ({
+                            ...assignment,
+                            className: classItem.name,
+                            classId: classItem.id
+                        }));
+                        allAssignments.push(...assignmentsWithClass);
+                    }
+                }
+                //Sort by creation date, newest first, and latest 5
+                const sortedAssignmnts = allAssignments
+                    .sort((a, b) => new Date(b.created) - new Date(a.created)).slice(0, 5);
+                setAssignments(sortedAssignmnts);
+            }
+        } catch (error) {
+            console.error('Error fetching assignments:', error);
+            setAssignments([]);
+        }
+    };
+
+    //Fetch students who needs attention
+    const fetchStudentsNeedingAttention = async () => {
+        try {
+            const teacherId = user?.uid;
+
+            //First get all classes
+            const classesResponse = await await fetch(`http://localhost:8088/api/v1/teacher/classes?teacher_id=${teacherId}`);
+            if (!classesResponse.ok) return;
+
+            const classesData = await classesResponse.json();
+            const classesList = classesData.classes || [];
+
+            const attentionList = [];
+
+            //For each class, check student submissions
+            for (const classItem of classesList) {
+                // Get assignments for this class
+                const assignmentsResponse = await fetch(`http://localhost:8088/api/v1/teacher/assignments/${classItem.id}?teacher_id=${teacherId}`);
+                if (!assignmentsResponse.ok) continue;
+
+                const assignmentsData = await assignmentsResponse.json();
+                const assignments = assignmentsData.assignments || [];
+
+                // For each assignment, check submissions
+                for (const assignment of assignments) {
+                    const submissionsResponse = await fetch(`http://localhost:8088/api/v1/teacher/submissions/${assignment.id}?teacher_id=${teacherId}`);
+                    if (!submissionsResponse.ok) continue;
+
+                    const submissionsData = await submissionsResponse.json();
+                    const submissions = submissionsData.submissions || [];
+
+                    // Find students who haven't submitted (late)
+                    const classStudents = classItem.students || [];
+                    const submittedStudentEmails = submissions.map(s => s.studentEmail);
+
+                    const lateStudents = classStudents.filter(student =>
+                        !submittedStudentEmails.includes(student.email) &&
+                        new Date(assignment.dueDate) < new Date()
+                    );
+
+                    // Add late students to attention list
+                    lateStudents.forEach(student => {
+                        attentionList.push({
+                            type: 'late_submission',
+                            studentName: student.name,
+                            studentEmail: student.email,
+                            assignmentTitle: assignment.title,
+                            className: classItem.name,
+                            dueDate: assignment.dueDate,
+                            daysLate: Math.floor((new Date() - new Date(assignment.dueDate)) / (1000 * 60 * 60 * 24))
+                        });
+                    });
+
+                    // Find ungraded submissions
+                    const ungradedSubmissions = submissions.filter(sub => !sub.grade && sub.status !== 'graded');
+                    ungradedSubmissions.forEach(submission => {
+                        attentionList.push({
+                            type: 'ungraded',
+                            studentName: submission.studentName,
+                            studentEmail: submission.studentEmail,
+                            assignmentTitle: assignment.title,
+                            className: classItem.name,
+                            submittedAt: submission.submittedAt,
+                            submissionId: submission.id
+                        });
+                    });
+                }
+            }
+
+            // Limit to top 6 most urgent items
+            setStudentsNeedingAttention(attentionList.slice(0, 6));
+
+        } catch (error) {
+            console.error('Error fetching students needing attention:', error);
+            setStudentsNeedingAttention([]);
+        }
+    };
+
+    //Fetch to-do items and recent activity
+    const fetchToDoAndActivity = async () => {
+        try {
+            const teacherId = user?.uid;
+
+            // First get all classes
+            const classesResponse = await fetch(`http://localhost:8088/api/v1/teacher/classes?teacher_id=${teacherId}`);
+            if (!classesResponse.ok) return;
+
+            const classesData = await classesResponse.json();
+            const classesList = classesData.classes || [];
+
+            const toDoList = [];
+            const activityList = [];
+
+            // For each class, check for pending tasks
+            for (const classItem of classesList) {
+                // Get assignments for this class
+                const assignmentsResponse = await fetch(`http://localhost:8088/api/v1/teacher/assignments/${classItem.id}?teacher_id=${teacherId}`);
+                if (!assignmentsResponse.ok) continue;
+
+                const assignmentsData = await assignmentsResponse.json();
+                const assignments = assignmentsData.assignments || [];
+
+                for (const assignment of assignments) {
+                    // Get submissions for this assignment
+                    const submissionsResponse = await fetch(`http://localhost:8088/api/v1/teacher/submissions/${assignment.id}?teacher_id=${teacherId}`);
+                    if (!submissionsResponse.ok) continue;
+
+                    const submissionsData = await submissionsResponse.json();
+                    const submissions = submissionsData.submissions || [];
+
+                    // Find ungraded submissions (To-Do Items)
+                    const ungradedSubmissions = submissions.filter(sub => !sub.grade && sub.status !== 'graded');
+                    if (ungradedSubmissions.length > 0) {
+                        toDoList.push({
+                            type: 'grading',
+                            title: `Grade ${assignment.title}`,
+                            description: `${ungradedSubmissions.length} submission${ungradedSubmissions.length > 1 ? 's' : ''} waiting for grading`,
+                            assignmentId: assignment.id,
+                            className: classItem.name,
+                            dueDate: assignment.dueDate,
+                            priority: new Date(assignment.dueDate) < new Date() ? 'high' : 'medium',
+                            count: ungradedSubmissions.length
+                        });
+                    }
+
+                    // Find recent submissions (last 24 hours) for activity feed
+                    const recentSubmissions = submissions.filter(sub => {
+                        const submittedDate = new Date(sub.submittedAt);
+                        const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+                        return submittedDate > yesterday;
+                    });
+
+                    recentSubmissions.forEach(submission => {
+                        activityList.push({
+                            type: 'submission',
+                            action: 'New submission received',
+                            details: `${submission.studentName} - ${assignment.title}`,
+                            time: submission.submittedAt,
+                            assignmentId: assignment.id,
+                            submissionId: submission.id
+                        });
+                    });
+                }
+
+                // Add upcoming due dates (next 3 days) to to-do list
+                const upcomingAssignments = assignments.filter(assignment => {
+                    const dueDate = new Date(assignment.dueDate);
+                    const threeDaysFromNow = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
+                    return dueDate > new Date() && dueDate <= threeDaysFromNow;
+                });
+
+                upcomingAssignments.forEach(assignment => {
+                    toDoList.push({
+                        type: 'upcoming_due',
+                        title: `Due soon: ${assignment.title}`,
+                        description: `Due in ${Math.ceil((new Date(assignment.dueDate) - new Date()) / (1000 * 60 * 60 * 24))} days`,
+                        assignmentId: assignment.id,
+                        className: classItem.name,
+                        dueDate: assignment.dueDate,
+                        priority: 'medium'
+                    });
+                });
+            }
+
+            // Sort to-do items by priority (high first, then by due date)
+            const sortedToDo = toDoList.sort((a, b) => {
+                const priorityOrder = { high: 0, medium: 1, low: 2 };
+                if (priorityOrder[a.priority] !== priorityOrder[b.priority]) {
+                    return priorityOrder[a.priority] - priorityOrder[b.priority];
+                }
+                return new Date(a.dueDate) - new Date(b.dueDate);
+            }).slice(0, 5); // Limit to top 5 items
+
+            // Sort activity by most recent
+            const sortedActivity = activityList
+                .sort((a, b) => new Date(b.time) - new Date(a.time))
+                .slice(0, 3); // Limit to 3 most recent
+
+            setToDoItems(sortedToDo);
+            setRecentActivity(sortedActivity);
+
+        } catch (error) {
+            console.error('Error fetching to-do and activity:', error);
+            setToDoItems([]);
+            setRecentActivity([]);
+        }
+    };
+
+    //Fetch submissions counts
+    const fetchSubmissionCounts = async (assignmentId) => {
+        try {
+            const teacherId = user.uid;
+            const response = await fetch(`http://localhost:8088/api/v1/teacher/submissions/${assignmentId}?teacher_id=${teacherId}`);
+            if (response.ok) {
+                const data = await response.json();
+                return {
+                    total: data.submissions?.length || 0,
+                    graded: data.submissions?.filter(s => s.status === 'graded').length || 0
+                };
+            }
+        } catch (error) {
+            console.error('Error fetching submissions:', error);
+        }
+        return {total: 0, graded: 0};
+    };
 
     // Show loading while checking authentication
     if (authLoading || loading) {
@@ -326,34 +576,60 @@ const TeacherDashboard = () => {
                                 {activeTab === 'recentPapers' && (
                                     <>
                                         <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                                            Papers you've created and their status
+                                            Your recent assignments and their status
                                         </Typography>
                                         <List>
-                                            {teacherData.recentPapers.map((paper, index) => (
-                                                <ListItem
-                                                    key={index}
-                                                    sx={{
-                                                        border: '1px solid #e0e0e0',
-                                                        borderRadius: 3,
-                                                        mb: 1,
-                                                        '&:hover': { bgcolor: 'action.hover' }
-                                                    }}
-                                                >
-                                                    <ListItemText
-                                                        primary={paper.title}
-                                                        secondary={
-                                                            <>
-                                                                <Box component="span" sx={{ display: 'block' }}>
-                                                                    {paper.questions} questions • {paper.status} • {paper.students} students
-                                                                </Box>
-                                                                <Box component="span" sx={{ display: 'block' }}>
-                                                                    Created: {paper.date}
-                                                                </Box>
-                                                            </>
-                                                        }
-                                                    />
-                                                </ListItem>
-                                            ))}
+                                            {assignments.length === 0 ? (
+                                                <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 3 }}>
+                                                    No assignments found. Create your first assignment!
+                                                </Typography>
+                                            ) : (
+                                                assignments.map((assignment, index) => (
+                                                    <ListItem
+                                                        key={index}
+                                                        sx={{
+                                                            border: '1px solid #e0e0e0',
+                                                            borderRadius: 3,
+                                                            mb: 1,
+                                                            '&:hover': { bgcolor: 'action.hover' },
+                                                            flexDirection: 'column',
+                                                            alignItems: 'flex-start'
+                                                        }}
+                                                    >
+                                                        {/* Header with title and status */}
+                                                        <Box sx={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+                                                            <Typography variant="subtitle1" fontWeight="medium">
+                                                                {assignment.title}
+                                                            </Typography>
+                                                            <Chip
+                                                                label={new Date(assignment.dueDate) < new Date() ? "Overdue" : "Active"}
+                                                                color={new Date(assignment.dueDate) < new Date() ? "error" : "primary"}
+                                                                size="small"
+                                                            />
+                                                        </Box>
+
+                                                        {/* Assignment details */}
+                                                        <Typography variant="body2" sx={{ mb: 1 }}>
+                                                            {assignment.className} • Due: {new Date(assignment.dueDate).toLocaleDateString()}
+                                                        </Typography>
+                                                        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                                                            Created: {new Date(assignment.created).toLocaleDateString()}
+                                                        </Typography>
+
+                                                        {/* Action buttons */}
+                                                        <Box sx={{ display: 'flex', gap: 1 }}>
+                                                            <Button
+                                                                variant="outlined"
+                                                                size="small"
+                                                                onClick={() => navigate('/teacher/submissions')}
+                                                                sx={{ mr: 1 }}
+                                                            >
+                                                                View Submissions
+                                                            </Button>
+                                                        </Box>
+                                                    </ListItem>
+                                                ))
+                                            )}
                                         </List>
                                     </>
                                 )}
@@ -361,31 +637,71 @@ const TeacherDashboard = () => {
                                 {activeTab === 'studentPerformance' && (
                                     <>
                                         <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                                            Recent performance trends across your classes
+                                            Students needing your attention
                                         </Typography>
                                         <List>
-                                            {teacherData.studentPerformance.map((student, index) => (
-                                                <ListItem
-                                                    key={index}
-                                                    sx={{
-                                                        border: '1px solid #e0e0e0',
-                                                        borderRadius: 3,
-                                                        mb: 1,
-                                                        '&:hover': { bgcolor: 'action.hover' }
-                                                    }}
-                                                >
-                                                    <ListItemText
-                                                        primary={`${student.name} - ${student.subject}`}
-                                                        secondary={
-                                                            <>
-                                                                <Box component="span" sx={{ display: 'block' }}>
-                                                                    Score: {student.score} • Tests: {student.tests} • Trend: {student.trend}
-                                                                </Box>
-                                                            </>
-                                                        }
-                                                    />
-                                                </ListItem>
-                                            ))}
+                                            {studentsNeedingAttention.length === 0 ? (
+                                                <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 3 }}>
+                                                    No students need immediate attention. Great job!
+                                                </Typography>
+                                            ) : (
+                                                studentsNeedingAttention.map((item, index) => (
+                                                    <ListItem
+                                                        key={index}
+                                                        sx={{
+                                                            border: '1px solid #e0e0e0',
+                                                            borderRadius: 3,
+                                                            mb: 1,
+                                                            '&:hover': { bgcolor: 'action.hover' }
+                                                        }}
+                                                    >
+                                                        <Box sx={{ width: '100%' }}>
+                                                            {/* Primary content without nested divs */}
+                                                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+                                                                <Typography variant="subtitle1" fontWeight="medium" component="div">
+                                                                    {item.studentName}
+                                                                </Typography>
+                                                                <Chip
+                                                                    label={item.type === 'late_submission' ? 'Late Submission' : 'Needs Grading'}
+                                                                    color={item.type === 'late_submission' ? 'error' : 'warning'}
+                                                                    size="small"
+                                                                />
+                                                            </Box>
+
+                                                            {/* Secondary content as separate Typography components */}
+                                                            <Typography variant="body2" component="div" sx={{ mb: 1 }}>
+                                                                {item.assignmentTitle} • {item.className}
+                                                            </Typography>
+
+                                                            <Typography variant="body2" color="text.secondary" component="div" sx={{ mb: 2 }}>
+                                                                {item.type === 'late_submission'
+                                                                    ? `Due ${item.daysLate} days ago`
+                                                                    : `Submitted ${new Date(item.submittedAt).toLocaleDateString()}`
+                                                                }
+                                                            </Typography>
+
+                                                            {/* Action buttons */}
+                                                            <Box sx={{ mt: 1 }}>
+                                                                <Button
+                                                                    variant="outlined"
+                                                                    size="small"
+                                                                    onClick={() => navigate('/teacher/submissions')}
+                                                                    sx={{ mr: 1 }}
+                                                                >
+                                                                    {item.type === 'late_submission' ? 'Send Reminder' : 'Grade Now'}
+                                                                </Button>
+                                                                <Button
+                                                                    variant="text"
+                                                                    size="small"
+                                                                    onClick={() => navigate('/teacher/submissions')}
+                                                                >
+                                                                    View Details
+                                                                </Button>
+                                                            </Box>
+                                                        </Box>
+                                                    </ListItem>
+                                                ))
+                                            )}
                                         </List>
                                     </>
                                 )}
@@ -393,32 +709,105 @@ const TeacherDashboard = () => {
                                 {activeTab === 'activityLog' && (
                                     <>
                                         <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                                            Your recent actions and system events
+                                            Your to-do list and recent activity
                                         </Typography>
+
+                                        {/* To-Do Section */}
+                                        <Typography variant="h6" sx={{ mt: 2, mb: 1 }}>To-Do List</Typography>
                                         <List>
-                                            {teacherData.activityLog.map((activity, index) => (
-                                                <ListItem
-                                                    key={index}
-                                                    sx={{
-                                                        border: '1px solid #e0e0e0',
-                                                        borderRadius: 3,
-                                                        mb: 1,
-                                                        '&:hover': { bgcolor: 'action.hover' }
-                                                    }}
-                                                >
-                                                    <ListItemText
-                                                        primary={activity.action}
-                                                        secondary={
-                                                            <>
-                                                                <Box component="span" sx={{ display: 'block' }}>
-                                                                    {activity.details} • {activity.time}
+                                            {toDoItems.length === 0 ? (
+                                                <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 2 }}>
+                                                    No pending tasks. You're all caught up!
+                                                </Typography>
+                                            ) : (
+                                                toDoItems.map((item, index) => (
+                                                    <ListItem
+                                                        key={index}
+                                                        sx={{
+                                                            border: '1px solid #e0e0e0',
+                                                            borderRadius: 3,
+                                                            mb: 1,
+                                                            '&:hover': { bgcolor: 'action.hover' }
+                                                        }}
+                                                    >
+                                                        <ListItemText
+                                                            primary={
+                                                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                                                    <Typography variant="subtitle1" fontWeight="medium">
+                                                                        {item.title}
+                                                                    </Typography>
+                                                                    <Chip
+                                                                        label={item.priority === 'high' ? 'High Priority' : 'Medium Priority'}
+                                                                        color={item.priority === 'high' ? 'error' : 'warning'}
+                                                                        size="small"
+                                                                    />
                                                                 </Box>
-                                                            </>
-                                                        }
-                                                    />
-                                                </ListItem>
-                                            ))}
+                                                            }
+                                                            secondary={
+                                                                <>
+                                                                    <Box component="span" sx={{ display: 'block', mt: 1 }}>
+                                                                        <Typography variant="body2">
+                                                                            {item.className} • {item.description}
+                                                                        </Typography>
+                                                                        {item.dueDate && (
+                                                                            <Typography variant="body2" color="text.secondary">
+                                                                                Due: {new Date(item.dueDate).toLocaleDateString()}
+                                                                            </Typography>
+                                                                        )}
+                                                                    </Box>
+                                                                    <Box sx={{ mt: 1 }}>
+                                                                        <Button
+                                                                            variant="contained"
+                                                                            size="small"
+                                                                            onClick={() => navigate('/teacher/submissions')}
+                                                                            sx={{ mr: 1 }}
+                                                                        >
+                                                                            {item.type === 'grading' ? 'Grade Now' : 'View Assignment'}
+                                                                        </Button>
+                                                                        <Button
+                                                                            variant="outlined"
+                                                                            size="small"
+                                                                            onClick={() => {/* Add reminder functionality */}}
+                                                                        >
+                                                                            Set Reminder
+                                                                        </Button>
+                                                                    </Box>
+                                                                </>
+                                                            }
+                                                        />
+                                                    </ListItem>
+                                                ))
+                                            )}
                                         </List>
+
+                                        {/* Recent Activity Section */}
+                                        {recentActivity.length > 0 && (
+                                            <>
+                                                <Typography variant="h6" sx={{ mt: 3, mb: 1 }}>Recent Activity</Typography>
+                                                <List>
+                                                    {recentActivity.map((activity, index) => (
+                                                        <ListItem
+                                                            key={index}
+                                                            sx={{
+                                                                border: '1px solid #e0e0e0',
+                                                                borderRadius: 3,
+                                                                mb: 1,
+                                                                bgcolor: 'action.hover'
+                                                            }}
+                                                        >
+                                                            <ListItemText
+                                                                primary={activity.action}
+                                                                secondary={
+                                                                    <Box component="span" sx={{ display: 'block' }}>
+                                                                        {activity.details} • {new Date(activity.time).toLocaleDateString()} at {new Date(activity.time).toLocaleTimeString()}
+                                                                    </Box>
+                                                                }
+                                                            />
+                                                        </ListItem>
+                                                    ))}
+                                                </List>
+                                            </>
+                                        )}
                                     </>
                                 )}
                             </CardContent>
