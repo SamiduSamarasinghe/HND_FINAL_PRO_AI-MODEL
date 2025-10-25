@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends
 from typing import List, Dict
 import traceback
 from datetime import datetime, timezone
@@ -7,6 +7,8 @@ import uuid
 
 from app.config.firebase_connection import FirebaseConnector
 from firebase_admin.firestore import FieldFilter
+
+from app.controller.teacher_controller import get_current_user
 
 router = APIRouter()
 connector = FirebaseConnector()
@@ -17,35 +19,32 @@ def get_current_user_email():
 
 @router.get("/student/notifications/{student_email}")
 async def get_student_notifications(student_email: str):
-    """Get unread notifications count for student"""
+    """Get unread notifications for student with types"""
     try:
         notifications_ref = __db.collection("student_notifications")
         query = notifications_ref.where(filter=FieldFilter("studentEmail", "==", student_email)).where(filter=FieldFilter("isSeen", "==", False))
         docs = query.stream()
 
-        unread_count = 0
         notifications = []
-
         for doc in docs:
-            unread_count += 1
             notification_data = doc.to_dict()
             notification_data["id"] = doc.id
             notifications.append(notification_data)
 
         return {
-            "unread_count": unread_count,
+            "unread_count": len(notifications),
             "notifications": notifications
         }
 
     except Exception as e:
-        print(f"❌ Error fetching notifications: {str(e)}")
+        print(f"Error fetching notifications: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch notifications: {str(e)}")
 
 @router.get("/student/assignments/{class_id}")
 async def get_class_assignments(class_id: str, student_email: str):
     """Get all assignments for a class with student submission status"""
     try:
-        print(f"📋 Fetching assignments for class: {class_id}, student: {student_email}")
+        print(f"Fetching assignments for class: {class_id}, student: {student_email}")
 
         assignments_ref = __db.collection("assignments")
         query = assignments_ref.where(filter=FieldFilter("classId", "==", class_id))
@@ -85,7 +84,7 @@ async def get_class_assignments(class_id: str, student_email: str):
                     is_late = current_time > due_date
                     can_submit = not is_late and not submission_data
             except Exception as date_error:
-                print(f"⚠️ Date parsing error: {date_error}")
+                print(f"Date parsing error: {date_error}")
                 can_submit = not submission_data
 
             assignment_data["submission"] = submission_data
@@ -95,11 +94,11 @@ async def get_class_assignments(class_id: str, student_email: str):
 
             assignments.append(assignment_data)
 
-        print(f"✅ Found {len(assignments)} assignments")
+        print(f"Found {len(assignments)} assignments")
         return {"assignments": assignments}
 
     except Exception as e:
-        print(f"❌ Error fetching assignments: {str(e)}")
+        print(f"Error fetching assignments: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch assignments: {str(e)}")
 
 @router.post("/student/submit-pdf")
@@ -112,7 +111,7 @@ async def submit_pdf_assignment(
 ):
     """Submit PDF assignment - Store PDF as base64 in Firestore"""
     try:
-        print(f"📤 Student {student_email} submitting assignment {assignment_id}")
+        print(f"Student {student_email} submitting assignment {assignment_id}")
 
         # Check if assignment exists
         assignment_ref = __db.collection("assignments").document(assignment_id)
@@ -123,22 +122,6 @@ async def submit_pdf_assignment(
 
         assignment_data = assignment_doc.to_dict()
         due_date_str = assignment_data["dueDate"]
-
-        # Check due date
-        try:
-            if 'Z' in due_date_str:
-                due_date = datetime.fromisoformat(due_date_str.replace('Z', '+00:00'))
-            else:
-                due_date = datetime.fromisoformat(due_date_str)
-                if due_date.tzinfo is None:
-                    due_date = due_date.replace(tzinfo=timezone.utc)
-
-            current_time = datetime.now(timezone.utc)
-            if current_time > due_date:
-                raise HTTPException(status_code=400, detail="Assignment submission is closed. Due date has passed.")
-        except Exception as date_error:
-            print(f"⚠️ Date error: {date_error}")
-            raise HTTPException(status_code=400, detail="Invalid due date")
 
         # Check if already submitted
         submissions_ref = __db.collection("submissions")
@@ -152,6 +135,12 @@ async def submit_pdf_assignment(
         file_content = await file.read()
         pdf_base64 = base64.b64encode(file_content).decode('utf-8')
 
+        # Check if submission is late
+        current_time = datetime.now(timezone.utc)
+        due_date = datetime.fromisoformat(due_date_str.replace('Z', '+00:00'))
+        is_late = current_time > due_date
+        days_late = (current_time - due_date).days if is_late else 0
+
         # Create submission record with PDF stored as base64
         submission_ref = __db.collection("submissions").document()
         submission_data = {
@@ -162,9 +151,11 @@ async def submit_pdf_assignment(
             "classId": class_id,
             "fileName": file.filename,
             "fileSize": len(file_content),
-            "pdfBase64": pdf_base64,  # Store PDF as base64 string
-            "submittedAt": datetime.now(timezone.utc).isoformat(),
+            "pdfBase64": pdf_base64,
+            "submittedAt": current_time.isoformat(),
             "status": "submitted",
+            "isLate": is_late,
+            "daysLate": days_late,
             "grade": None,
             "teacherFeedback": ""
         }
@@ -180,18 +171,19 @@ async def submit_pdf_assignment(
             notification_ref = __db.collection("student_notifications").document(notification_doc.id)
             notification_ref.update({"isSeen": True})
 
-        print(f"✅ Assignment submitted successfully!")
+        print(f"Assignment submitted successfully! Late: {is_late}")
 
         return {
-            "message": "Assignment submitted successfully",
+            "message": "Assignment submitted successfully" + (" (Late)" if is_late else ""),
             "submission_id": submission_ref.id,
-            "file_name": file.filename
+            "file_name": file.filename,
+            "is_late": is_late
         }
 
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Error submitting assignment: {str(e)}")
+        print(f"Error submitting assignment: {str(e)}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Failed to submit assignment: {str(e)}")
 
@@ -228,7 +220,7 @@ async def get_student_classes(request: dict):
         }
 
     except Exception as e:
-        print(f"❌ Error fetching student classes: {str(e)}")
+        print(f"Error fetching student classes: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch student classes: {str(e)}")
 
 @router.get("/student/submissions/{student_email}")
@@ -264,7 +256,7 @@ async def get_student_submissions(student_email: str):
         return {"submissions": submissions}
 
     except Exception as e:
-        print(f"❌ Error fetching submissions: {str(e)}")
+        print(f"Error fetching submissions: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch submissions: {str(e)}")
 
 @router.get("/student/download-pdf/{submission_id}")
@@ -293,5 +285,6 @@ async def download_submission_pdf(submission_id: str):
         }
 
     except Exception as e:
-        print(f"❌ Error downloading PDF: {str(e)}")
+        print(f"Error downloading PDF: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to download PDF: {str(e)}")
+
