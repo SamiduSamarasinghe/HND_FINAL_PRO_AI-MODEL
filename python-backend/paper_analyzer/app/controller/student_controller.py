@@ -6,7 +6,6 @@ import base64
 import uuid
 
 from app.config.firebase_connection import FirebaseConnector
-from firebase_admin.firestore import FieldFilter
 
 from app.controller.teacher_controller import get_current_user
 
@@ -22,7 +21,7 @@ async def get_student_notifications(student_email: str):
     """Get unread notifications for student with types"""
     try:
         notifications_ref = __db.collection("student_notifications")
-        query = notifications_ref.where(filter=FieldFilter("studentEmail", "==", student_email)).where(filter=FieldFilter("isSeen", "==", False))
+        query = notifications_ref.where("studentEmail", "==", student_email).where("isSeen", "==", False)
         docs = query.stream()
 
         notifications = []
@@ -47,7 +46,7 @@ async def get_class_assignments(class_id: str, student_email: str):
         print(f"Fetching assignments for class: {class_id}, student: {student_email}")
 
         assignments_ref = __db.collection("assignments")
-        query = assignments_ref.where(filter=FieldFilter("classId", "==", class_id))
+        query = assignments_ref.where("classId", "==", class_id)
         assignment_docs = query.stream()
 
         assignments = []
@@ -57,7 +56,7 @@ async def get_class_assignments(class_id: str, student_email: str):
 
             # Check if student has submitted
             submissions_ref = __db.collection("submissions")
-            submission_query = submissions_ref.where(filter=FieldFilter("assignmentId", "==", doc.id)).where(filter=FieldFilter("studentEmail", "==", student_email))
+            submission_query = submissions_ref.where("assignmentId", "==", doc.id).where("studentEmail", "==", student_email)
             submission_docs = submission_query.stream()
 
             submission_data = None
@@ -127,7 +126,7 @@ async def submit_pdf_assignment(
 
         # Check if already submitted
         submissions_ref = __db.collection("submissions")
-        existing_query = submissions_ref.where(filter=FieldFilter("assignmentId", "==", assignment_id)).where(filter=FieldFilter("studentEmail", "==", student_email))
+        existing_query = submissions_ref.where("assignmentId", "==", assignment_id).where("studentEmail", "==", student_email)
         existing_docs = existing_query.stream()
 
         for doc in existing_docs:
@@ -174,7 +173,7 @@ async def submit_pdf_assignment(
 
         # Mark notification as seen
         notifications_ref = __db.collection("student_notifications")
-        notification_query = notifications_ref.where(filter=FieldFilter("assignmentId", "==", assignment_id)).where(filter=FieldFilter("studentEmail", "==", student_email))
+        notification_query = notifications_ref.where("assignmentId", "==", assignment_id).where("studentEmail", "==", student_email)
         notification_docs = notification_query.stream()
 
         for notification_doc in notification_docs:
@@ -238,7 +237,7 @@ async def get_student_submissions(student_email: str):
     """Get all submissions by student"""
     try:
         submissions_ref = __db.collection("submissions")
-        query = submissions_ref.where(filter=FieldFilter("studentEmail", "==", student_email))
+        query = submissions_ref.where("studentEmail", "==", student_email)
         docs = query.stream()
 
         submissions = []

@@ -32,7 +32,6 @@ import {
     Upload as UploadIcon,
     Create as GenerateIcon,
     Visibility as ViewIcon,
-    InsertDriveFileOutlined,
     Logout as LogoutIcon,
     Notifications as NotificationsIcon,
     Warning as WarningIcon,
@@ -106,7 +105,6 @@ const StudentDashboard = () => {
             const notificationsResponse = await fetch(`http://localhost:8088/api/v1/student/notifications/${studentEmail}`);
             const notificationsData = notificationsResponse.ok ? await notificationsResponse.json() : { notifications: [] };
 
-
             // 1. Fetch student's enrolled classes
             const classesResponse = await fetch('http://localhost:8088/api/v1/student/classes', {
                 method: 'POST',
@@ -147,6 +145,9 @@ const StudentDashboard = () => {
                 const submissionsResponse = await fetch(`http://localhost:8088/api/v1/student/submissions/${studentEmail}`);
                 const submissionsData = submissionsResponse.ok ? await submissionsResponse.json() : { submissions: [] };
 
+                // Use submissions as papers data
+                const papersData = { papers: [] };
+
                 // Calculate real data
                 const studentName = user.displayName || user.email?.split('@')[0] || "Student";
 
@@ -155,16 +156,12 @@ const StudentDashboard = () => {
                     taskQuestions: allAssignments.reduce((total, assignment) => {
                         return total + (assignment.questions?.length || 0);
                     }, 0),
-                    papersAnalyzed: submissionsData.submissions.length,
+                    papersAnalyzed: submissionsData.submissions.length, // Use submissions count instead
                     mockTests: totalSubmissions,
                     studyStreak: 7,
-                    recentPapers: submissionsData.submissions.slice(0, 3).map(sub => ({
-                        title: sub.assignmentTitle || `Submission ${sub.id}`,
-                        questions: 0,
-                        date: sub.submittedAt ? new Date(sub.submittedAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
-                    })),
+                    recentPapers: getRecentPapers([], submissionsData.submissions), // Pass empty papers array
                     notifications: notificationsData.notifications,
-                    studyActivities: generateRecentActivities(submissionsData.submissions),
+                    studyActivities: getRecentStudyActivities(submissionsData.submissions, []), // Pass empty papers array
                     tutorMessage: getPersonalizedTutorMessage(submissionsData.submissions)
                 });
             }
@@ -185,53 +182,34 @@ const StudentDashboard = () => {
             studyStreak: 0,
             recentPapers: [],
             notifications: [],
-            mockTestResults: [],
             studyActivities: [
-                { title: "Complete your first paper upload", time: "Get started" },
-                { title: "Take your first mock test", time: "Ready when you are" }
+                {
+                    title: "Upload your first paper for AI analysis",
+                    time: "Get started",
+                    type: "suggestion",
+                    icon: <UploadIcon />
+                },
+                {
+                    title: "Take your first mock test",
+                    time: "Ready when you are",
+                    type: "suggestion",
+                    icon: <MockTestIcon />
+                }
             ],
             tutorMessage: `Welcome ${studentName}! Upload your first paper to begin your learning journey.`
         });
     };
 
-// Helper function to generate recent activities
-    const generateRecentActivities = (submissions) => {
-        const activities = [];
-        const now = new Date();
-
-        // Add submission activities
-        const recentSubmissions = submissions.slice(0, 3);
-        recentSubmissions.forEach(sub => {
-            const subDate = sub.submittedAt ? new Date(sub.submittedAt) : now;
-            const daysAgo = Math.floor((now - subDate) / (1000 * 60 * 60 * 24));
-            activities.push({
-                title: `Submitted ${sub.assignmentTitle || 'an assignment'}`,
-                time: daysAgo === 0 ? 'Today' : daysAgo === 1 ? 'Yesterday' : `${daysAgo} days ago`
-            });
-        });
-
-        // Fill with default activities if needed
-        if (activities.length === 0) {
-            activities.push(
-                { title: "Complete your first assignment", time: "Get started" },
-                { title: "Check for new assignments", time: "Ready when you are" }
-            );
-        }
-
-        return activities.slice(0, 3);
-    };
-
-// Helper function for personalized tutor messages
-    const getPersonalizedTutorMessage = (firestoreData, progress) => {
+    // Helper function for personalized tutor messages
+    const getPersonalizedTutorMessage = (submissionsData) => {
         const studentName = user.displayName || user.email?.split('@')[0] || "Student";
 
-        if (!firestoreData.mockTests || firestoreData.mockTests.length === 0) {
+        if (!submissionsData || submissionsData.length === 0) {
             return `Welcome ${studentName}! I'm your AI tutor. Upload your first paper or take a mock test to get started with personalized learning.`;
         }
 
-        // Analyze performance if we have mock tests
-        const latestTest = firestoreData.mockTests[0];
-        const averageScore = firestoreData.mockTests.reduce((sum, test) => sum + (test.score || 0), 0) / firestoreData.mockTests.length;
+        // Analyze performance if we have submissions
+        const averageScore = submissionsData.reduce((sum, test) => sum + (test.score || 0), 0) / submissionsData.length;
 
         if (averageScore < 60) {
             return `Hi ${studentName}, I see you're working hard! Let's focus on strengthening your fundamentals. Would you like practice questions on your weaker topics?`;
@@ -244,6 +222,102 @@ const StudentDashboard = () => {
 
     const handleTabChange = (event, newValue) => {
         setActiveTab(newValue);
+    };
+
+    //Helper function to get recent papers
+    const getRecentPapers = (papers, submissions) => {
+        const threeDaysAgo = new Date();
+        threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+
+        const recentPapers = [];
+
+        //Add uploaded papers
+        papers.forEach(paper => {
+            const paperDate = new Date(paper.uploadedAt || paper.createdAt);
+            if (paperDate >= threeDaysAgo) {
+                recentPapers.push({
+                    title: paper.filename || `Paper ${paper.id}`,
+                    type: 'uploaded',
+                    date: paperDate.toISOString().split('T')[0],
+                    subject: paper.subject || 'General',
+                    status: paper.status || 'analyzed'
+                });
+            }
+        });
+
+        //Add submitted assignments as papers
+        submissions.forEach(submission => {
+            const subDate = new Date(submission.submittedAt);
+            if (subDate >= threeDaysAgo) {
+                recentPapers.push({
+                    title: submission.assignmentTitle || `Submission ${submission.id}`,
+                    type: 'submitted',
+                    date: subDate.toISOString().split('T')[0],
+                    subject: submission.subject || 'Assignment',
+                    status: 'submitted'
+                });
+            }
+        });
+
+        //Sort by date descending and return top 5
+        return recentPapers.sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 5);
+    };
+
+    //Helper function to get recent study activities
+    const getRecentStudyActivities = (submissions, papers) => {
+        const threeDaysAgo = new Date();
+        threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+        const activities = [];
+
+        //Add paper upload activities
+        papers.forEach(paper => {
+            const paperDate = new Date(paper.uploadedAt || paper.createdAt);
+            if (paperDate >= threeDaysAgo) {
+                const daysAgo = Math.floor((new Date() - paperDate) / (1000 * 60 * 60 * 24));
+                activities.push({
+                    title: `Uploaded ${paper.filename || 'a paper'} for analysis`,
+                    time: daysAgo === 0 ? 'Today' : daysAgo === 1 ? 'Yesterday' : `${daysAgo} days ago`,
+                    type: 'upload',
+                    icon: <UploadIcon />
+                });
+            }
+        });
+
+        //Add assignment submission activities - FIXED: changed 'submissions' to 'submission'
+        submissions.forEach(submission => {
+            const subDate = new Date(submission.submittedAt);
+            if (subDate >= threeDaysAgo) {
+                const daysAgo = Math.floor((new Date() - subDate) / (1000 * 60 * 60 * 24));
+                activities.push({
+                    title: `Submitted ${submission.assignmentTitle || 'an assignment'}`,
+                    time: daysAgo === 0 ? 'Today' : daysAgo === 1 ? 'Yesterday' : `${daysAgo} days ago`,
+                    type: 'submission',
+                    icon: <AssignmentIcon />
+                });
+            }
+        });
+
+        //Add mock test activities (if any)
+        submissions.forEach(submission => {
+            const subDate = new Date(submission.submittedAt);
+            if (subDate >= threeDaysAgo && submission.type === 'mock_test') {
+                const daysAgo = Math.floor((new Date() - subDate) / (1000 * 60 * 60 * 24));
+                activities.push({
+                    title: `Completed a mock test`,
+                    time: daysAgo === 0 ? 'Today' : daysAgo === 1 ? 'Yesterday' : `${daysAgo} days ago`,
+                    type: 'mock_test',
+                    icon: <MockTestIcon />
+                });
+            }
+        });
+
+        //Sort by date descending and return top 5
+        return activities.sort((a, b) => {
+            const aDays = a.time === 'Today' ? 0 : a.time === 'Yesterday' ? 1 : parseInt(a.time);
+            const bDays = b.time === 'Today' ? 0 : b.time === 'Yesterday' ? 1 : parseInt(b.time);
+            return aDays - bDays;
+        })
+            .slice(0, 5);
     };
 
     // Show loading while checking authentication or fetching data
@@ -404,32 +478,64 @@ const StudentDashboard = () => {
                                 {activeTab === 'recentPapers' && (
                                     <>
                                         <Typography variant="h6" gutterBottom>
-                                            Recently Uploaded Papers
+                                            Recent Document Interactions
                                         </Typography>
                                         <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                                            Papers you've uploaded for analysis
+                                            Your paper uploads and submissions from the last 3 days
                                         </Typography>
-                                        <List>
-                                            {studentData.recentPapers.map((paper, index) => (
-                                                <ListItem
-                                                    key={index}
-                                                    sx={{
-                                                        border: '1px solid #e0e0e0',
-                                                        borderRadius: 2,
-                                                        mb: 1,
-                                                        '&:hover': { bgcolor: 'action.hover' }
-                                                    }}
+                                        {studentData.recentPapers.length === 0 ? (
+                                            <Box sx={{ textAlign: 'center', py: 4 }}>
+                                                <PaperIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
+                                                <Typography variant="body1" color="text.secondary" gutterBottom>
+                                                    No recent document activity
+                                                </Typography>
+                                                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                                                    Your paper uploads and submissions from the last 3 days will appear here.
+                                                </Typography>
+                                                <Button
+                                                    variant="contained"
+                                                    startIcon={<UploadIcon />}
+                                                    onClick={() => navigate('/student/upload-papers')}
                                                 >
-                                                    <ListItemIcon>
-                                                        <InsertDriveFileOutlined sx={{ color: 'primary.main' }} />
-                                                    </ListItemIcon>
-                                                    <ListItemText
-                                                        primary={paper.title}
-                                                        secondary={`${paper.questions} questions • ${paper.date}`}
-                                                    />
-                                                </ListItem>
-                                            ))}
-                                        </List>
+                                                    Upload Your First Paper
+                                                </Button>
+                                            </Box>
+                                        ) : (
+                                            <List>
+                                                {studentData.recentPapers.map((paper, index) => (
+                                                    <ListItem
+                                                        key={index}
+                                                        sx={{
+                                                            border: '1px solid #e0e0e0',
+                                                            borderRadius: 2,
+                                                            mb: 1,
+                                                            '&:hover': { bgcolor: 'action.hover' }
+                                                        }}
+                                                    >
+                                                        <ListItemIcon>
+                                                            {paper.type === 'uploaded' ? (
+                                                                <UploadIcon sx={{ color: 'primary.main' }} />
+                                                            ) : (
+                                                                <AssignmentIcon sx={{ color: 'secondary.main' }} />
+                                                            )}
+                                                        </ListItemIcon>
+                                                        <ListItemText
+                                                            primary={
+                                                                <Box>
+                                                                    <Typography variant="subtitle1" fontWeight="medium">
+                                                                        {paper.title}
+                                                                    </Typography>
+                                                                    <Typography variant="body2" color="text.secondary">
+                                                                        {paper.type === 'uploaded' ? 'Paper Upload' : 'Assignment'} • {paper.subject}
+                                                                    </Typography>
+                                                                </Box>
+                                                            }
+                                                            secondary={`${paper.date} • ${paper.status}`}
+                                                        />
+                                                    </ListItem>
+                                                ))}
+                                            </List>
+                                        )}
                                     </>
                                 )}
 
@@ -502,32 +608,60 @@ const StudentDashboard = () => {
                                 {activeTab === 'studyActivity' && (
                                     <>
                                         <Typography variant="h6" gutterBottom>
-                                            Study Activity
+                                            Recent Study Activities
                                         </Typography>
                                         <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                                            Your recent study sessions and progress
+                                            Your learning activities from the last 3 days
                                         </Typography>
-                                        <List>
-                                            {studentData.studyActivities.map((activity, index) => (
-                                                <ListItem
-                                                    key={index}
-                                                    sx={{
-                                                        border: '1px solid #e0e0e0',
-                                                        borderRadius: 2,
-                                                        mb: 1,
-                                                        '&:hover': { bgcolor: 'action.hover' }
-                                                    }}
-                                                >
-                                                    <ListItemIcon>
-                                                        <StudyIcon sx={{ color: 'primary.main' }} />
-                                                    </ListItemIcon>
-                                                    <ListItemText
-                                                        primary={activity.title}
-                                                        secondary={activity.time}
-                                                    />
-                                                </ListItem>
-                                            ))}
-                                        </List>
+                                        {studentData.studyActivities.length === 0 ? (
+                                            <Box sx={{ textAlign: 'center', py: 4 }}>
+                                                <StudyIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
+                                                <Typography variant="body1" color="text.secondary" gutterBottom>
+                                                    No recent study activities
+                                                </Typography>
+                                                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                                                    Start learning by uploading papers, taking tests, or completing assignments.
+                                                </Typography>
+                                                <Stack direction="row" spacing={1} justifyContent="center">
+                                                    <Button
+                                                        variant="outlined"
+                                                        startIcon={<UploadIcon />}
+                                                        onClick={() => navigate('/student/upload-papers')}
+                                                    >
+                                                        Upload Paper
+                                                    </Button>
+                                                    <Button
+                                                        variant="outlined"
+                                                        startIcon={<GenerateIcon />}
+                                                        onClick={() => navigate('/student/generate-test')}
+                                                    >
+                                                        Take Test
+                                                    </Button>
+                                                </Stack>
+                                            </Box>
+                                        ) : (
+                                            <List>
+                                                {studentData.studyActivities.map((activity, index) => (
+                                                    <ListItem
+                                                        key={index}
+                                                        sx={{
+                                                            border: '1px solid #e0e0e0',
+                                                            borderRadius: 2,
+                                                            mb: 1,
+                                                            '&:hover': { bgcolor: 'action.hover' }
+                                                        }}
+                                                    >
+                                                        <ListItemIcon>
+                                                            {activity.icon || <StudyIcon sx={{ color: 'primary.main' }} />}
+                                                        </ListItemIcon>
+                                                        <ListItemText
+                                                            primary={activity.title}
+                                                            secondary={activity.time}
+                                                        />
+                                                    </ListItem>
+                                                ))}
+                                            </List>
+                                        )}
                                     </>
                                 )}
                             </CardContent>
