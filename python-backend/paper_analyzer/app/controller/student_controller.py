@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends
 from typing import List, Dict
 import traceback
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import base64
 import uuid
 
@@ -112,7 +112,7 @@ async def submit_pdf_assignment(
 ):
     """Submit PDF assignment - Store PDF as base64 in Firestore"""
     try:
-        print(f"📤 Student {student_email} submitting assignment {assignment_id}")
+        print(f"Student {student_email} submitting assignment {assignment_id}")
 
         # Check if assignment exists
         assignment_ref = __db.collection("assignments").document(assignment_id)
@@ -180,7 +180,7 @@ async def submit_pdf_assignment(
             notification_ref = __db.collection("student_notifications").document(notification_doc.id)
             notification_ref.update({"isSeen": True})
 
-        print(f"✅ Assignment submitted successfully! Late: {is_late}")
+        print(f"Assignment submitted successfully! Late: {is_late}")
 
         return {
             "message": "Assignment submitted successfully" + (" (Late)" if is_late else ""),
@@ -192,7 +192,7 @@ async def submit_pdf_assignment(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Error submitting assignment: {str(e)}")
+        print(f"Error submitting assignment: {str(e)}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Failed to submit assignment: {str(e)}")
 
@@ -297,3 +297,17 @@ async def download_submission_pdf(submission_id: str):
         print(f"Error downloading PDF: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to download PDF: {str(e)}")
 
+@router.get("/student/events/{student_email}")
+async def get_student_events(student_email: str):
+    """Get events for student"""
+    try:
+        from app.model.firebase_db_model import get_events_for_user
+        events = get_events_for_user(
+            user_email=student_email,
+            user_role="student"
+        )
+        return {"events": events}
+
+    except Exception as e:
+        print(f"Error fetching student events: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch events: {str(e)}")
