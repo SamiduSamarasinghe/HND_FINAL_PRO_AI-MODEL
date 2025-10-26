@@ -26,7 +26,7 @@ import {
     InsertDriveFile as PaperIcon,
     QueryStats as AnalyticsIcon,
     School as StudyIcon,
-    EmojiEvents as StreakIcon,
+    EmojiEvents as EmojiEventsIcon,
     Help as TutorIcon,
     Psychology as BrainIcon,
     Upload as UploadIcon,
@@ -38,7 +38,13 @@ import {
     Info as InfoIcon,
     CheckCircle as CheckCircleIcon,
     Assignment as AssignmentIcon,
-    Assignment as MockTestIcon
+    Assignment as MockTestIcon,
+    LocalFireDepartment as LocalFireDepartmentIcon,
+    AssignmentTurnedIn as AssignmentTurnedInIcon,
+    Grade as GradeIcon,
+    PendingActions as PendingActionsIcon,
+    Quiz as QuizIcon,
+    Event as EventIcon
 } from '@mui/icons-material';
 
 const StudentDashboard = () => {
@@ -101,85 +107,276 @@ const StudentDashboard = () => {
             const studentEmail = user?.email;
             if (!studentEmail) return;
 
-            // Fetch notifications
-            const notificationsResponse = await fetch(`http://localhost:8088/api/v1/student/notifications/${studentEmail}`);
-            const notificationsData = notificationsResponse.ok ? await notificationsResponse.json() : { notifications: [] };
-
-            // 1. Fetch student's enrolled classes
-            const classesResponse = await fetch('http://localhost:8088/api/v1/student/classes', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    studentEmail: studentEmail
+            // Fetch data in parallel for better performance
+            const [notificationsResponse, classesResponse] = await Promise.all([
+                fetch(`http://localhost:8088/api/v1/student/notifications/${studentEmail}`),
+                fetch('http://localhost:8088/api/v1/student/classes', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        studentEmail: studentEmail
+                    })
                 })
-            });
+            ]);
 
+            // Handle notifications response
+            let notificationsData = { notifications: [] };
+            if (notificationsResponse.ok) {
+                notificationsData = await notificationsResponse.json();
+            } else {
+                console.error('Failed to fetch notifications:', notificationsResponse.status);
+            }
+
+            // Handle classes response
+            let studentClasses = [];
             if (classesResponse.ok) {
                 const classesData = await classesResponse.json();
-                const studentClasses = classesData.classes || [];
+                studentClasses = classesData.classes || [];
+            } else {
+                console.error('Failed to fetch classes:', classesResponse.status);
+            }
 
-                // 2. Fetch assignments for all classes
-                let allAssignments = [];
-                let totalSubmissions = 0;
+            // Fetch assignments for all classes in parallel
+            let allAssignments = [];
+            let submittedAssignments = [];
+            let pendingAssignmentsCount = 0;
+            let upcomingDeadlinesCount = 0;
+            let totalQuestionsAttempted = 0;
+            let subjectPerformance = {};
 
-                for (const classItem of studentClasses) {
-                    const assignmentsResponse = await fetch(`http://localhost:8088/api/v1/student/assignments/${classItem.id}?student_email=${studentEmail}`);
-                    if (assignmentsResponse.ok) {
-                        const assignmentsData = await assignmentsResponse.json();
+            if (studentClasses.length > 0) {
+                const assignmentPromises = studentClasses.map(classItem =>
+                    fetch(`http://localhost:8088/api/v1/student/assignments/${classItem.id}?student_email=${studentEmail}`)
+                );
+
+                const assignmentResponses = await Promise.all(assignmentPromises);
+
+                for (let i = 0; i < assignmentResponses.length; i++) {
+                    const assignmentResponse = assignmentResponses[i];
+                    if (!assignmentResponse.ok) {
+                        console.error(`Failed to fetch assignments for class ${studentClasses[i].id}:`, assignmentResponse.status);
+                        continue;
+                    }
+
+                    try {
+                        const assignmentsData = await assignmentResponse.json();
                         const classAssignments = assignmentsData.assignments || [];
 
-                        // Count submissions
                         classAssignments.forEach(assignment => {
+                            // Count questions
+                            totalQuestionsAttempted += assignment.questions?.length || 0;
+
+                            // Track assignment status
                             if (assignment.submission) {
-                                totalSubmissions++;
+                                submittedAssignments.push(assignment);
+                            } else {
+                                pendingAssignmentsCount++;
+
+                                // Check if assignment has upcoming deadline (within 7 days)
+                                if (assignment.dueDate) {
+                                    try {
+                                        const dueDate = new Date(assignment.dueDate);
+                                        const today = new Date();
+                                        const daysUntilDue = Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24));
+                                        if (daysUntilDue > 0 && daysUntilDue <= 7) {
+                                            upcomingDeadlinesCount++;
+                                        }
+                                    } catch (dateError) {
+                                        console.error('Error parsing due date:', dateError);
+                                    }
+                                }
+                            }
+
+                            // Track subject performance
+                            const subject = assignment.subject || 'General';
+                            if (!subjectPerformance[subject]) {
+                                subjectPerformance[subject] = {
+                                    total: 0,
+                                    submitted: 0,
+                                    grades: []
+                                };
+                            }
+                            subjectPerformance[subject].total++;
+                            if (assignment.submission) {
+                                subjectPerformance[subject].submitted++;
+                                if (assignment.submission.achievedGrade && assignment.submission.totalGrade) {
+                                    try {
+                                        const gradePercent = (assignment.submission.achievedGrade / assignment.submission.totalGrade) * 100;
+                                        subjectPerformance[subject].grades.push(gradePercent);
+                                    } catch (gradeError) {
+                                        console.error('Error calculating grade percentage:', gradeError);
+                                    }
+                                }
                             }
                         });
 
                         allAssignments = [...allAssignments, ...classAssignments];
+                    } catch (parseError) {
+                        console.error('Error parsing assignments response:', parseError);
                     }
                 }
-
-                // 3. Fetch student's own submissions
-                const submissionsResponse = await fetch(`http://localhost:8088/api/v1/student/submissions/${studentEmail}`);
-                const submissionsData = submissionsResponse.ok ? await submissionsResponse.json() : { submissions: [] };
-
-                // Use submissions as papers data
-                const papersData = { papers: [] };
-
-                // Calculate real data
-                const studentName = user.displayName || user.email?.split('@')[0] || "Student";
-
-                setStudentData({
-                    name: studentName,
-                    taskQuestions: allAssignments.reduce((total, assignment) => {
-                        return total + (assignment.questions?.length || 0);
-                    }, 0),
-                    papersAnalyzed: submissionsData.submissions.length, // Use submissions count instead
-                    mockTests: totalSubmissions,
-                    studyStreak: 7,
-                    recentPapers: getRecentPapers([], submissionsData.submissions), // Pass empty papers array
-                    notifications: notificationsData.notifications,
-                    studyActivities: getRecentStudyActivities(submissionsData.submissions, []), // Pass empty papers array
-                    tutorMessage: getPersonalizedTutorMessage(submissionsData.submissions)
-                });
             }
+
+            // Fetch student's submissions
+            let submissionsData = { submissions: [] };
+            try {
+                const submissionsResponse = await fetch(`http://localhost:8088/api/v1/student/submissions/${studentEmail}`);
+                if (submissionsResponse.ok) {
+                    submissionsData = await submissionsResponse.json();
+                } else {
+                    console.error('Failed to fetch submissions:', submissionsResponse.status);
+                }
+            } catch (submissionsError) {
+                console.error('Error fetching submissions:', submissionsError);
+            }
+
+            // Calculate subject analytics
+            const { strongestSubject, subjectsNeedAttention, averageGrade } = calculateSubjectAnalytics(subjectPerformance);
+
+            const studentName = user.displayName || user.email?.split('@')[0] || "Student";
+
+            setStudentData({
+                name: studentName,
+                // New metrics
+                strongestSubject: strongestSubject,
+                subjectsNeedAttention: subjectsNeedAttention,
+                studyStreak: calculateStudyStreak(submissionsData.submissions),
+                assignmentsCompleted: submittedAssignments.length,
+                averageGrade: averageGrade,
+                pendingAssignments: pendingAssignmentsCount,
+                questionsAttempted: totalQuestionsAttempted,
+                upcomingDeadlines: upcomingDeadlinesCount,
+                // Existing data
+                papersAnalyzed: submissionsData.submissions.length,
+                recentPapers: getRecentPapers([], submissionsData.submissions),
+                notifications: notificationsData.notifications,
+                studyActivities: getRecentStudyActivities(submissionsData.submissions, []),
+                tutorMessage: getPersonalizedTutorMessage(submissionsData.submissions)
+            });
+
         } catch (err) {
             console.error('Error fetching student data:', err);
             setDefaultStudentData();
         }
     };
 
-// Helper function for fallback data
+    // Helper function to calculate subject analytics
+    const calculateSubjectAnalytics = (subjectPerformance) => {
+        let strongestSubject = "N/A";
+        let subjectsNeedAttention = "N/A";
+        let highestAverage = 0;
+        let lowestAverage = 100;
+        let totalGrades = [];
+        let totalWeight = 0;
+
+        Object.entries(subjectPerformance).forEach(([subject, data]) => {
+            if (data.grades.length > 0) {
+                const average = data.grades.reduce((sum, grade) => sum + grade, 0) / data.grades.length;
+
+                // Track strongest subject
+                if (average > highestAverage) {
+                    highestAverage = average;
+                    strongestSubject = subject;
+                }
+
+                // Track subjects needing attention (below 60%)
+                if (average < 60 && average < lowestAverage) {
+                    lowestAverage = average;
+                    subjectsNeedAttention = subject;
+                }
+
+                // Collect grades for overall average
+                totalGrades.push(average);
+                totalWeight += data.grades.length;
+            }
+        });
+
+        // Calculate overall average grade
+        let averageGrade = "N/A";
+        if (totalGrades.length > 0) {
+            const weightedAverage = totalGrades.reduce((sum, grade, index) => {
+                const weight = subjectPerformance[Object.keys(subjectPerformance)[index]].grades.length;
+                return sum + (grade * weight);
+            }, 0) / totalWeight;
+            averageGrade = `${Math.round(weightedAverage)}%`;
+        }
+
+        return {
+            strongestSubject,
+            subjectsNeedAttention: subjectsNeedAttention === "N/A" ? "None" : subjectsNeedAttention,
+            averageGrade
+        };
+    };
+
+    // Helper function to calculate study streak
+    const calculateStudyStreak = (submissions) => {
+        if (!submissions || submissions.length === 0) return 0;
+
+        // Get unique dates and sort them
+        const submissionDates = submissions
+            .map(sub => {
+                const date = new Date(sub.submittedAt);
+                return new Date(date.getFullYear(), date.getMonth(), date.getDate()); // Normalize to day
+            })
+            .filter((date, index, self) =>
+                self.findIndex(d => d.getTime() === date.getTime()) === index
+            )
+            .sort((a, b) => b - a); // Descending
+
+        if (submissionDates.length === 0) return 0;
+
+        let streak = 0;
+        const today = new Date();
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+
+        // Check if latest submission was today or yesterday
+        const latestDate = submissionDates[0];
+        const isToday = latestDate.toDateString() === today.toDateString();
+        const isYesterday = latestDate.toDateString() === yesterday.toDateString();
+
+        if (!isToday && !isYesterday) return 0; // Streak broken
+
+        streak = 1; // Start with current day
+        let currentCheckDate = isToday ? today : yesterday;
+
+        // Check consecutive days backwards
+        for (let i = 0; i < submissionDates.length; i++) {
+            const checkDate = new Date(currentCheckDate);
+            checkDate.setDate(checkDate.getDate() - 1);
+
+            const hasSubmission = submissionDates.some(date =>
+                date.toDateString() === checkDate.toDateString()
+            );
+
+            if (hasSubmission) {
+                streak++;
+                currentCheckDate = checkDate;
+            } else {
+                break;
+            }
+        }
+
+        return streak;
+    };
+
+    // Helper function for fallback data
     const setDefaultStudentData = () => {
         const studentName = user.displayName || user.email?.split('@')[0] || "Student";
         setStudentData({
             name: studentName,
-            taskQuestions: 0,
-            papersAnalyzed: 0,
-            mockTests: 0,
+            strongestSubject: "N/A",
+            subjectsNeedAttention: "N/A",
             studyStreak: 0,
+            assignmentsCompleted: 0,
+            averageGrade: "N/A",
+            pendingAssignments: 0,
+            questionsAttempted: 0,
+            upcomingDeadlines: 0,
+            // Existing metrics
+            papersAnalyzed: 0,
             recentPapers: [],
             notifications: [],
             studyActivities: [
@@ -409,14 +606,18 @@ const StudentDashboard = () => {
                 {/* Stats Cards */}
                 <Grid container spacing={3} sx={{ mb: 4 }}>
                     {[
-                        { icon: <MockTestIcon sx={{ fontSize: 40 }} />, title: "Task Questions", value: studentData.taskQuestions },
-                        { icon: <PaperIcon sx={{ fontSize: 40 }} />, title: "Papers Analyzed", value: studentData.papersAnalyzed },
-                        { icon: <AnalyticsIcon sx={{ fontSize: 40 }} />, title: "Mock Tests", value: studentData.mockTests },
-                        { icon: <StreakIcon sx={{ fontSize: 40 }} />, title: "Study Streak", value: `${studentData.studyStreak} days` }
+                        { icon: <EmojiEventsIcon sx={{ fontSize: 40 }} />, title: "Strongest Subject", value: studentData.strongestSubject || "N/A" },
+                        { icon: <WarningIcon sx={{ fontSize: 40 }} />, title: "Needs Attention", value: studentData.subjectsNeedAttention || "N/A" },
+                        { icon: <LocalFireDepartmentIcon sx={{ fontSize: 40 }} />, title: "Study Streak", value: `${studentData.studyStreak} days` },
+                        { icon: <AssignmentTurnedInIcon sx={{ fontSize: 40 }} />, title: "Assignments Completed", value: studentData.assignmentsCompleted },
+                        { icon: <GradeIcon sx={{ fontSize: 40 }} />, title: "Average Grade", value: studentData.averageGrade || "N/A" },
+                        { icon: <PendingActionsIcon sx={{ fontSize: 40 }} />, title: "Pending Assignments", value: studentData.pendingAssignments },
+                        { icon: <QuizIcon sx={{ fontSize: 40 }} />, title: "Questions Attempted", value: studentData.questionsAttempted },
+                        { icon: <EventIcon sx={{ fontSize: 40 }} />, title: "Upcoming Deadlines", value: studentData.upcomingDeadlines }
                     ].map((stat, index) => (
                         <Grid item xs={12} sm={6} md={3} key={index}>
-                            <Card sx={{ borderRadius: 2, border: '1px solid #e0e0e0' }}>
-                                <CardContent sx={{ display: 'flex', alignItems: 'center' }}>
+                            <Card sx={{ borderRadius: 2, border: '1px solid #e0e0e0', height: '100%' }}>
+                                <CardContent sx={{ display: 'flex', alignItems: 'center', p: 2 }}>
                                     <Box sx={{
                                         bgcolor: 'primary.light',
                                         p: 1.5,
@@ -426,9 +627,13 @@ const StudentDashboard = () => {
                                     }}>
                                         {stat.icon}
                                     </Box>
-                                    <Box>
-                                        <Typography variant="h6" color="text.secondary">{stat.title}</Typography>
-                                        <Typography variant="h4">{stat.value}</Typography>
+                                    <Box sx={{ flexGrow: 1 }}>
+                                        <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                                            {stat.title}
+                                        </Typography>
+                                        <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
+                                            {stat.value}
+                                        </Typography>
                                     </Box>
                                 </CardContent>
                             </Card>
@@ -456,16 +661,16 @@ const StudentDashboard = () => {
                                     sx={{ py: 2 }}
                                 />
                                 <Tab
-                                    value="notifications"
-                                    label="Notifications"
-                                    icon={<NotificationsIcon />}
+                                    value="studyActivity"
+                                    label="Study Activity"
+                                    icon={<StudyIcon />}
                                     iconPosition="start"
                                     sx={{ py: 2 }}
                                 />
                                 <Tab
-                                    value="studyActivity"
-                                    label="Study Activity"
-                                    icon={<StudyIcon />}
+                                    value="notifications"
+                                    label="Notifications"
+                                    icon={<NotificationsIcon />}
                                     iconPosition="start"
                                     sx={{ py: 2 }}
                                 />
