@@ -1,6 +1,7 @@
 import React, {useEffect, useState} from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext.jsx';
+import UpcomingEventsBox from "./UpcomingEventsBox.jsx";
 
 import {
     Box,
@@ -606,14 +607,14 @@ const StudentDashboard = () => {
                 {/* Stats Cards */}
                 <Grid container spacing={3} sx={{ mb: 4 }}>
                     {[
-                        { icon: <EmojiEventsIcon sx={{ fontSize: 40 }} />, title: "Strongest Subject", value: studentData.strongestSubject || "N/A" },
-                        { icon: <WarningIcon sx={{ fontSize: 40 }} />, title: "Needs Attention", value: studentData.subjectsNeedAttention || "N/A" },
-                        { icon: <LocalFireDepartmentIcon sx={{ fontSize: 40 }} />, title: "Study Streak", value: `${studentData.studyStreak} days` },
                         { icon: <AssignmentTurnedInIcon sx={{ fontSize: 40 }} />, title: "Assignments Completed", value: studentData.assignmentsCompleted },
-                        { icon: <GradeIcon sx={{ fontSize: 40 }} />, title: "Average Grade", value: studentData.averageGrade || "N/A" },
                         { icon: <PendingActionsIcon sx={{ fontSize: 40 }} />, title: "Pending Assignments", value: studentData.pendingAssignments },
+                        { icon: <GradeIcon sx={{ fontSize: 40 }} />, title: "Average Grade", value: studentData.averageGrade || "N/A" },
+                        { icon: <EventIcon sx={{ fontSize: 40 }} />, title: "Upcoming Deadlines", value: studentData.upcomingDeadlines },
+                        { icon: <EmojiEventsIcon sx={{ fontSize: 40 }} />, title: "Strongest Subject", value: studentData.strongestSubject || "N/A" },
                         { icon: <QuizIcon sx={{ fontSize: 40 }} />, title: "Questions Attempted", value: studentData.questionsAttempted },
-                        { icon: <EventIcon sx={{ fontSize: 40 }} />, title: "Upcoming Deadlines", value: studentData.upcomingDeadlines }
+                        { icon: <WarningIcon sx={{ fontSize: 40 }} />, title: "Needs Attention", value: studentData.subjectsNeedAttention || "N/A" },
+                        { icon: <LocalFireDepartmentIcon sx={{ fontSize: 40 }} />, title: "Study Streak", value: `${studentData.studyStreak} days` }
                     ].map((stat, index) => (
                         <Grid item xs={12} sm={6} md={3} key={index}>
                             <Card sx={{ borderRadius: 2, border: '1px solid #e0e0e0', height: '100%' }}>
@@ -903,7 +904,7 @@ const StudentDashboard = () => {
                                                 borderColor: 'primary.main'
                                             }
                                         }}
-                                        onClick={() => navigate('/upload-papers')}
+                                        onClick={() => navigate('/student/upload-papers')}
                                     >
                                         Upload New Paper
                                     </Button>
@@ -923,7 +924,7 @@ const StudentDashboard = () => {
                                                 borderColor: 'primary.main'
                                             }
                                         }}
-                                        onClick={() => navigate('/generate-test')}
+                                        onClick={() => navigate('/student/generate-test')}
                                     >
                                         Generate Mock Test
                                     </Button>
@@ -972,6 +973,11 @@ const StudentDashboard = () => {
                                 </Stack>
                             </CardContent>
                         </Card>
+                        <UpcomingEventsBox
+                            userEmail={user?.email}
+                            userRole={userProfile?.role}
+                            userId={user?.uid}
+                            />
                     </Grid>
                 </Grid>
             </Box>

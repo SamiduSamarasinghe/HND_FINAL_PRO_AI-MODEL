@@ -33,9 +33,12 @@ import {
     Psychology as BrainIcon,
     Chat as AssistantIcon,
     Assignment as TaskIcon,
-    Logout as LogoutIcon
+    Logout as LogoutIcon,
+    Event as EventIcon
 } from '@mui/icons-material';
 import { useAuth } from './AuthContext';
+import SetReminderModal from "./SetReminderModal.jsx";
+import UpcomingEventsBox from "./UpcomingEventsBox.jsx";
 
 const TeacherDashboard = () => {
     const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -48,6 +51,7 @@ const TeacherDashboard = () => {
     const [studentsNeedingAttention, setStudentsNeedingAttention] = useState([]);
     const [toDoItems, setToDoItems] = useState([]);
     const [recentActivity, setRecentActivity] = useState([]);
+    const [reminderModalOpen, setReminderModalOpen] = useState(false);
 
 
     //Fetch real dashboard data
@@ -877,6 +881,11 @@ const TeacherDashboard = () => {
                                             icon: <ManageClassesIcon />,
                                             text: "Manage Classes",
                                             action: () => navigate('/teacher/manage-classes')
+                                        },
+                                        {
+                                            icon: <EventIcon />,
+                                            text: "Set Reminder",
+                                            action: () => setReminderModalOpen(true)
                                         }
                                     ].map((action, index) => (
                                         <Button
@@ -904,7 +913,17 @@ const TeacherDashboard = () => {
                                 </Stack>
                             </CardContent>
                         </Card>
+                        <UpcomingEventsBox
+                            userEmail={user?.email}
+                            userRole={userProfile?.role}
+                            userId={user?.uid}
+                        />
                     </Grid>
+                    <SetReminderModal
+                        open={reminderModalOpen}
+                        onClose={() => setReminderModalOpen(false)}
+                        teacherId={user?.uid}
+                    />
                 </Grid>
             </Box>
         </Box>
