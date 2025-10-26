@@ -3,6 +3,8 @@ from typing import List, Dict
 from datetime import datetime
 import traceback
 
+from firebase_admin import firestore
+
 from app.config.firebase_connection import FirebaseConnector
 
 router = APIRouter()
@@ -266,6 +268,8 @@ async def create_student_notifications(class_id: str, assignment_id: str, assign
                 "assignmentId": assignment_id,
                 "classId": class_id,
                 "assignmentTitle": assignment_title,
+                "type": "new_assignment",
+                "message": f"New assignment: {assignment_title}. Due: {due_date}",
                 "dueDate": due_date,
                 "isSeen": False,
                 "createdAt": datetime.now().isoformat()
@@ -337,11 +341,22 @@ async def grade_submission(grade_data: dict, current_user: str = Depends(get_cur
     """Grade a submission"""
     try:
         submission_id = grade_data.get("submissionId")
-        grade = grade_data.get("grade")
+        achieved_grade = grade_data.get("achievedGrade")
+        total_grade = grade_data.get("totalGrade")
         feedback = grade_data.get("feedback", "")
 
-        if not submission_id or grade is None:
-            raise HTTPException(status_code=400, detail="Submission ID and grade are required")
+        if not submission_id or achieved_grade is None or total_grade is None:
+            raise HTTPException(status_code=400, detail="Submission ID, achieved grade, and total grade are required")
+
+        # Validate grades
+        try:
+            achieved_grade = int(achieved_grade)
+            total_grade = int(total_grade)
+            if achieved_grade < 0 or total_grade <= 0 or achieved_grade > total_grade:
+                raise ValueError("Invalid grade values")
+
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Grades must be valid positive integers")
 
         submission_ref = __db.collection("submissions").document(submission_id)
         submission_doc = submission_ref.get()
@@ -351,18 +366,44 @@ async def grade_submission(grade_data: dict, current_user: str = Depends(get_cur
 
         # Update submission
         updates = {
-            "grade": grade,
+            "achievedGrade": achieved_grade,
+            "totalGrade": total_grade,
+            "grade": f"{achieved_grade}/{total_grade}",
             "teacherFeedback": feedback,
             "status": "graded",
-            "gradedAt": datetime.now().isoformat()
+            "gradedAt": datetime.now().isoformat(),
+            "gradedBy": current_user
         }
 
         submission_ref.update(updates)
 
+        # Create graded notification for student
+        submission_data = submission_doc.to_dict()
+        notification_ref = __db.collection("student_notifications").document()
+        notification_data = {
+            "id": notification_ref.id,
+            "studentEmail": submission_data.get("studentEmail"),
+            "assignmentId": submission_data.get("assignmentId"),
+            "assignmentTitle": "Your assignment has been graded",  # We'll get the actual title below
+            "type": "graded",
+            "message": f"Your submission has been graded: {achieved_grade}/{total_grade}. {feedback}",
+            "isSeen": False,
+            "createdAt": datetime.now().isoformat()
+        }
+
+        # Get assignment title for the notification
+        assignment_ref = __db.collection("assignments").document(submission_data.get("assignmentId"))
+        assignment_doc = assignment_ref.get()
+        if assignment_doc.exists:
+            assignment_data = assignment_doc.to_dict()
+            notification_data["assignmentTitle"] = assignment_data.get("title", "Assignment")
+
+        notification_ref.set(notification_data)
+
         return {
             "message": "Submission graded successfully",
             "submission_id": submission_id,
-            "grade": grade
+            "grade": f"{achieved_grade}/{total_grade}"
         }
 
     except HTTPException:
@@ -370,3 +411,176 @@ async def grade_submission(grade_data: dict, current_user: str = Depends(get_cur
     except Exception as e:
         print(f"Error grading submission: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to grade submission: {str(e)}")
+
+@router.post("/teacher/send-reminder")
+async def send_student_reminder(reminder_data: dict, current_user: str = Depends(get_current_user)):
+    """Send reminder to student about missing assignment"""
+    try:
+        student_email = reminder_data.get("studentEmail")
+        assignment_id = reminder_data.get("assignmentId")
+        message = reminder_data.get("message", "Please submit your assignment as soon as possible.")
+
+        if not student_email or not assignment_id:
+            raise HTTPException(status_code=400, detail="Student email and assignment ID are required")
+
+        # Get assignment details
+        assignment_ref = __db.collection("assignments").document(assignment_id)
+        assignment_doc = assignment_ref.get()
+
+        if not assignment_doc.exists:
+            raise HTTPException(status_code=404, detail="Assignment not found")
+
+        assignment_data = assignment_doc.to_dict()
+
+        # Create reminder notification
+        notification_ref = __db.collection("student_notifications").document()
+        notification_data = {
+            "id": notification_ref.id,
+            "studentEmail": student_email,
+            "assignmentId": assignment_id,
+            "assignmentTitle": assignment_data.get("title", "Assignment"),
+            "type": "reminder",
+            "message": message,
+            "isSeen": False,
+            "createdAt": datetime.now().isoformat(),
+            "sentByTeacher": current_user
+        }
+
+        notification_ref.set(notification_data)
+
+        # Track reminder count for student (for chronic late tracking)
+        student_reminders_ref = __db.collection("student_reminder_tracking").document(f"{student_email}_{assignment_id}")
+        student_reminders_doc = student_reminders_ref.get()
+
+        if student_reminders_doc.exists:
+            student_reminders_ref.update({"reminderCount": firestore.Increment(1)})
+        else:
+            student_reminders_ref.set({
+                "studentEmail": student_email,
+                "assignmentId": assignment_id,
+                "assignmentTitle": assignment_data.get("title", "Assignment"),
+                "reminderCount": 1,
+                "firstReminderAt": datetime.now().isoformat(),
+                "lastReminderAt": datetime.now().isoformat()
+            })
+
+        return {
+            "message": "Reminder sent successfully",
+            "notification_id": notification_ref.id
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error sending reminder: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to send reminder: {str(e)}")
+
+@router.get("/teacher/late-submissions/{class_id}")
+async def get_late_submissions(class_id: str, current_user: str = Depends(get_current_user)):
+    """Get late and missing submissions for a class"""
+    try:
+        print(f"Fetching late submissions for class: {class_id}, teacher: {current_user}")
+
+        # Get class details
+        class_ref = __db.collection("classes").document(class_id)
+        class_doc = class_ref.get()
+
+        if not class_doc.exists:
+            raise HTTPException(status_code=404, detail="Class not found")
+
+        class_data = class_doc.to_dict()
+
+        # Verify the teacher owns this class
+        if class_data.get("teacherId") != current_user:
+            raise HTTPException(status_code=403, detail="Not authorized to access this class")
+
+        # Get all assignments for this class
+        assignments_ref = __db.collection("assignments")
+        assignments_query = assignments_ref.where("classId", "==", class_id)
+        assignments_docs = assignments_query.stream()
+
+        late_missing_data = []
+
+        for assignment_doc in assignments_docs:
+            assignment_data = assignment_doc.to_dict()
+            assignment_data["id"] = assignment_doc.id
+
+            # Get all submissions for this assignment
+            submissions_ref = __db.collection("submissions")
+            submissions_query = submissions_ref.where("assignmentId", "==", assignment_doc.id)
+            submissions_docs = submissions_query.stream()
+
+            submitted_students = []
+            for submission_doc in submissions_docs:
+                submission_data = submission_doc.to_dict()
+                submitted_students.append(submission_data["studentEmail"])
+
+                # Check if submission is late and not graded
+                if submission_data.get("isLate") and submission_data.get("status") != "graded":
+                    # Get reminder count for this student
+                    reminder_tracking_ref = __db.collection("student_reminder_tracking").document(f"{submission_data['studentEmail']}_{assignment_doc.id}")
+                    reminder_tracking_doc = reminder_tracking_ref.get()
+                    reminder_count = reminder_tracking_doc.to_dict().get("reminderCount", 0) if reminder_tracking_doc.exists else 0
+
+                    # Calculate days late
+                    due_date = datetime.fromisoformat(assignment_data["dueDate"].replace('Z', '+00:00'))
+                    submitted_date = datetime.fromisoformat(submission_data["submittedAt"].replace('Z', '+00:00'))
+                    days_late = (submitted_date - due_date).days
+
+                    late_missing_data.append({
+                        "type": "late_submission",
+                        "studentName": submission_data["studentName"],
+                        "studentEmail": submission_data["studentEmail"],
+                        "assignmentId": assignment_doc.id,
+                        "assignmentTitle": assignment_data["title"],
+                        "className": class_data["name"],
+                        "dueDate": assignment_data["dueDate"],
+                        "submittedAt": submission_data["submittedAt"],
+                        "daysLate": days_late,
+                        "reminderCount": reminder_count,
+                        "submissionId": submission_doc.id,
+                        "status": "late"
+                    })
+
+            # Find students who haven't submitted
+            class_students = class_data.get("students", [])
+            for student in class_students:
+                if student.get("email") not in submitted_students:
+                    # Check if assignment is past due
+                    due_date = datetime.fromisoformat(assignment_data["dueDate"].replace('Z', '+00:00'))
+                    current_date = datetime.now()
+
+                    if current_date > due_date:
+                        # Get reminder count
+                        reminder_tracking_ref = __db.collection("student_reminder_tracking").document(f"{student['email']}_{assignment_doc.id}")
+                        reminder_tracking_doc = reminder_tracking_ref.get()
+                        reminder_count = reminder_tracking_doc.to_dict().get("reminderCount", 0) if reminder_tracking_doc.exists else 0
+
+                        days_late = (current_date - due_date).days
+
+                        late_missing_data.append({
+                            "type": "missing_submission",
+                            "studentName": student["name"],
+                            "studentEmail": student["email"],
+                            "assignmentId": assignment_doc.id,
+                            "assignmentTitle": assignment_data["title"],
+                            "className": class_data["name"],
+                            "dueDate": assignment_data["dueDate"],
+                            "daysLate": days_late,
+                            "reminderCount": reminder_count,
+                            "status": "missing"
+                        })
+
+        print(f"Found {len(late_missing_data)} late/missing submissions for class {class_id}")
+
+        return {
+            "class_id": class_id,
+            "class_name": class_data["name"],
+            "late_missing_submissions": late_missing_data
+        }
+
+    except Exception as e:
+        print(f"❌ Error fetching late submissions: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to fetch late submissions: {str(e)}")
