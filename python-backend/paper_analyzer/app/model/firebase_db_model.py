@@ -251,3 +251,98 @@ def get_all_subjects_on_feedbacks(userid):
         print(f"Error{error}")
         return f"Error getting feedback {error}"
 
+def save_event(event_data: dict):
+    """
+    Save a simple event to Firebase
+    """
+    try:
+        event_ref = __db.collection("events").document()
+        event_data["id"] = event_ref.id
+        event_data["created_at"] = firestore.SERVER_TIMESTAMP
+
+        event_ref.set(event_data)
+        return {"success": True, "event_id": event_ref.id}
+
+    except Exception as error:
+        print(f"Error saving event: {error}")
+        return {"success": False, "error": str(error)}
+
+def get_events_for_user(user_email: str, user_role: str, teacher_id: str = None):
+    """
+    Get events for a user (student or teacher)
+    - Students see: events for their classes + events targeting them individually
+    - Teachers see: events they created + events for classes they teach
+    """
+    try:
+        current_time = datetime.datetime.now()
+
+        # Get events that are not expired (due_date >= current time)
+        events_ref = __db.collection("events")
+        query = events_ref.where("due_date", ">=", current_time.isoformat())
+        docs = query.stream()
+
+        user_events = []
+
+        for doc in docs:
+            event_data = doc.to_dict()
+            event_data["id"] = doc.id
+
+            # Convert due_date to check priority
+            due_date = datetime.datetime.fromisoformat(event_data["due_date"].replace('Z', '+00:00'))
+            hours_until_due = (due_date - current_time).total_seconds() / 3600
+
+            # Auto-set priority
+            if hours_until_due <= 24:
+                event_data["display_priority"] = "high"
+            else:
+                event_data["display_priority"] = event_data.get("priority", "medium")
+
+            if user_role == "student":
+                # Students see events for their classes or targeting them individually
+                if (event_data.get("target_type") == "class" and
+                    user_email in event_data.get("target_emails", [])) or \
+                        (event_data.get("target_type") == "individual" and
+                         user_email in event_data.get("target_emails", [])):
+                    user_events.append(event_data)
+
+            elif user_role == "teacher":
+                # Teachers see events they created OR events for classes they teach
+                if (event_data.get("created_by") == teacher_id) or \
+                        (event_data.get("target_type") == "class" and
+                         teacher_id in event_data.get("teacher_classes", [])):
+                    user_events.append(event_data)
+
+        # Sort by priority and due date
+        user_events.sort(key=lambda x: (
+            {"high": 0, "medium": 1, "low": 2}[x.get("display_priority", "medium")],
+            datetime.datetime.fromisoformat(x["due_date"].replace('Z', '+00:00'))
+        ))
+
+        return user_events[:10]  # Return top 10 events
+
+    except Exception as error:
+        print(f"Error fetching events: {error}")
+        return []
+
+def cleanup_expired_events():
+    """
+    Remove events that have passed their due date
+    This can be called periodically or on event fetch
+    """
+    try:
+        current_time = datetime.datetime.now()
+        events_ref = __db.collection("events")
+        query = events_ref.where("due_date", "<", current_time.isoformat())
+        docs = query.stream()
+
+        deleted_count = 0
+        for doc in docs:
+            doc.reference.delete()
+            deleted_count += 1
+
+        print(f"Cleaned up {deleted_count} expired events")
+        return deleted_count
+
+    except Exception as error:
+        print(f"Error cleaning up events: {error}")
+        return 0

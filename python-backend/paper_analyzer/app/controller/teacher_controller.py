@@ -1,10 +1,9 @@
 from fastapi import APIRouter, HTTPException, Depends, Request
-from typing import List, Dict
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
+from typing import List, Optional, Dict
+import uuid
 import traceback
-
 from firebase_admin import firestore
-
 from app.config.firebase_connection import FirebaseConnector
 
 router = APIRouter()
@@ -584,3 +583,61 @@ async def get_late_submissions(class_id: str, current_user: str = Depends(get_cu
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Failed to fetch late submissions: {str(e)}")
+
+# Remove all the complex reminder group endpoints and replace with:
+
+@router.post("/teacher/events")
+async def create_event(event_data: dict, current_user: str = Depends(get_current_user)):
+    """Create a simple event"""
+    try:
+        # Validate required fields
+        if not event_data.get("title") or not event_data.get("due_date"):
+            raise HTTPException(status_code=400, detail="Title and due date are required")
+
+        # Prepare event data
+        event_payload = {
+            "title": event_data.get("title"),
+            "description": event_data.get("description", ""),
+            "type": event_data.get("type", "general"),
+            "due_date": event_data.get("due_date"),
+            "priority": event_data.get("priority", "medium"),
+            "target_type": event_data.get("target_type"),  # "class" or "individual"
+            "target_emails": event_data.get("target_emails", []),
+            "target_class_ids": event_data.get("target_class_ids", []),
+            "created_by": current_user,
+            "teacher_classes": event_data.get("teacher_classes", [])
+        }
+
+        # Save to Firebase
+        from app.model.firebase_db_model import save_event
+        result = save_event(event_payload)
+
+        if result["success"]:
+            return {
+                "message": "Event created successfully",
+                "event_id": result["event_id"]
+            }
+        else:
+            raise HTTPException(status_code=500, detail=result["error"])
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error creating event: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to create event: {str(e)}")
+
+@router.get("/teacher/events")
+async def get_teacher_events(current_user: str = Depends(get_current_user)):
+    """Get events for teacher"""
+    try:
+        from app.model.firebase_db_model import get_events_for_user
+        events = get_events_for_user(
+            user_email=current_user,  # Using teacher ID as email for simplicity
+            user_role="teacher",
+            teacher_id=current_user
+        )
+        return {"events": events}
+
+    except Exception as e:
+        print(f"Error fetching teacher events: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch events: {str(e)}")
