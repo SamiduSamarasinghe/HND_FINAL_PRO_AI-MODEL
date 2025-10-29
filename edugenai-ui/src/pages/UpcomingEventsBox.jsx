@@ -41,7 +41,8 @@ const UpcomingEventsBox = ({ userEmail, userRole, userId }) => {
             const response = await fetch(url);
             if (response.ok) {
                 const data = await response.json();
-                setUpcomingEvents(data.events || []);
+                // Ensure events is always an array
+                setUpcomingEvents(Array.isArray(data.events) ? data.events : []);
             } else {
                 console.error('Failed to fetch events:', response.status);
                 setUpcomingEvents([]);

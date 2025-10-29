@@ -68,13 +68,7 @@ const TeacherMockTest = () => {
         }
     }, [user, userProfile, authLoading, navigate]);
 
-    // Teacher-specific data
-    const teacherClasses = [
-        { id: 'math101', name: 'Mathematics 101', students: 32 },
-        { id: 'physics201', name: 'Physics 201', students: 28 },
-        { id: 'advCalc', name: 'Advanced Calculus', students: 24 },
-        { id: 'stats', name: 'Statistics', students: 35 }
-    ];
+
 
     // Fetch subjects from backend
     useEffect(() => {
@@ -316,22 +310,6 @@ const TeacherMockTest = () => {
                                         sx={{ mb: 3 }}
                                         helperText="Leave empty to use auto-generated title"
                                     />
-
-                                    <FormControl fullWidth sx={{ mb: 3 }}>
-                                        <InputLabel>Class *</InputLabel>
-                                        <Select
-                                            value={classGroup}
-                                            label="Class *"
-                                            onChange={(e) => setClassGroup(e.target.value)}
-                                        >
-                                            <MenuItem value="" disabled>Select a class</MenuItem>
-                                            {teacherClasses.map((cls) => (
-                                                <MenuItem key={cls.id} value={cls.id}>
-                                                    {cls.name} ({cls.students} students)
-                                                </MenuItem>
-                                            ))}
-                                        </Select>
-                                    </FormControl>
 
                                     <FormControl fullWidth sx={{ mb: 3 }}>
                                         <InputLabel>Subject *</InputLabel>

@@ -8,6 +8,7 @@ import uuid
 from app.config.firebase_connection import FirebaseConnector
 
 from app.controller.teacher_controller import get_current_user
+from app.model.firebase_db_model import get_students_with_feedback
 
 router = APIRouter()
 connector = FirebaseConnector()
@@ -311,3 +312,14 @@ async def get_student_events(student_email: str):
     except Exception as e:
         print(f"Error fetching student events: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch events: {str(e)}")
+
+
+@router.get("/students")
+async def get_all_students_with_feedback():
+    """Get all students who have submitted feedback/papers"""
+    try:
+        students = get_students_with_feedback()
+        return {"students": students}
+    except Exception as error:
+        print(f"Error fetching students: {error}")
+        return {"students": []}

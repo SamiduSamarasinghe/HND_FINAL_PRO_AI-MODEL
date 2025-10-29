@@ -221,7 +221,7 @@ const TeacherDashboard = () => {
         }
     };
 
-    //Fetch students who needs attention
+    //Fetch students who need attention
     const fetchStudentsNeedingAttention = async () => {
         try {
             const teacherId = user?.uid;
@@ -258,7 +258,7 @@ const TeacherDashboard = () => {
                 }
             }
 
-            // Limit to top 6 most urgent items (prioritize missing submissions, then by days late)
+            // Limit to top 6 most urgent items
             const sortedList = attentionList.sort((a, b) => {
                 // Missing submissions first
                 if (a.type === 'missing_submission' && b.type !== 'missing_submission') return -1;

@@ -346,3 +346,48 @@ def cleanup_expired_events():
     except Exception as error:
         print(f"Error cleaning up events: {error}")
         return 0
+
+def get_students_with_feedback():
+    """
+    Get all students who have submitted feedback/papers with their email and name
+    """
+    try:
+        # Get all feedback to find students
+        feedback_ref = __db.collection("mock_test_feedback")
+        docs = feedback_ref.stream()
+
+        students = {}
+
+        for doc in docs:
+            data = doc.to_dict()
+            user_id = data.get("user_id")
+
+            if user_id and user_id not in students:
+                # Try to get user data from users collection
+                try:
+                    user_doc = __db.collection("users").document(user_id).get()
+                    if user_doc.exists:
+                        user_data = user_doc.to_dict()
+                        students[user_id] = {
+                            "user_id": user_id,
+                            "email": user_data.get("email", "Unknown"),
+                            "name": user_data.get("displayName", f"Student {user_id[:6]}"),
+                            "last_activity": data.get("timestamp")
+                        }
+                    else:
+                        # Fallback if user document doesn't exist
+                        students[user_id] = {
+                            "user_id": user_id,
+                            "email": "Unknown",
+                            "name": f"Student {user_id[:6]}",
+                            "last_activity": data.get("timestamp")
+                        }
+                except Exception as e:
+                    print(f"Error fetching user data for {user_id}: {e}")
+                    continue
+
+        return list(students.values())
+
+    except Exception as error:
+        print(f"Error fetching students: {error}")
+        return []

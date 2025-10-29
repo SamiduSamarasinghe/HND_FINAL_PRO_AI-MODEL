@@ -521,10 +521,30 @@ async def get_late_submissions(class_id: str, current_user: str = Depends(get_cu
                     reminder_tracking_doc = reminder_tracking_ref.get()
                     reminder_count = reminder_tracking_doc.to_dict().get("reminderCount", 0) if reminder_tracking_doc.exists else 0
 
-                    # Calculate days late
-                    due_date = datetime.fromisoformat(assignment_data["dueDate"].replace('Z', '+00:00'))
-                    submitted_date = datetime.fromisoformat(submission_data["submittedAt"].replace('Z', '+00:00'))
-                    days_late = (submitted_date - due_date).days
+                    # Calculate days late - FIXED: Handle date parsing safely
+                    try:
+                        due_date_str = assignment_data["dueDate"]
+                        submitted_date_str = submission_data["submittedAt"]
+
+                        # Parse dates safely
+                        if 'Z' in due_date_str:
+                            due_date = datetime.fromisoformat(due_date_str.replace('Z', '+00:00'))
+                        else:
+                            due_date = datetime.fromisoformat(due_date_str)
+                            if due_date.tzinfo is None:
+                                due_date = due_date.replace(tzinfo=timezone.utc)
+
+                        if 'Z' in submitted_date_str:
+                            submitted_date = datetime.fromisoformat(submitted_date_str.replace('Z', '+00:00'))
+                        else:
+                            submitted_date = datetime.fromisoformat(submitted_date_str)
+                            if submitted_date.tzinfo is None:
+                                submitted_date = submitted_date.replace(tzinfo=timezone.utc)
+
+                        days_late = (submitted_date - due_date).days
+                    except Exception as date_error:
+                        print(f"Date parsing error: {date_error}")
+                        days_late = 0  # Default to 0 if date parsing fails
 
                     late_missing_data.append({
                         "type": "late_submission",
@@ -546,29 +566,40 @@ async def get_late_submissions(class_id: str, current_user: str = Depends(get_cu
             for student in class_students:
                 if student.get("email") not in submitted_students:
                     # Check if assignment is past due
-                    due_date = datetime.fromisoformat(assignment_data["dueDate"].replace('Z', '+00:00'))
-                    current_date = datetime.now()
+                    try:
+                        due_date_str = assignment_data["dueDate"]
+                        if 'Z' in due_date_str:
+                            due_date = datetime.fromisoformat(due_date_str.replace('Z', '+00:00'))
+                        else:
+                            due_date = datetime.fromisoformat(due_date_str)
+                            if due_date.tzinfo is None:
+                                due_date = due_date.replace(tzinfo=timezone.utc)
 
-                    if current_date > due_date:
-                        # Get reminder count
-                        reminder_tracking_ref = __db.collection("student_reminder_tracking").document(f"{student['email']}_{assignment_doc.id}")
-                        reminder_tracking_doc = reminder_tracking_ref.get()
-                        reminder_count = reminder_tracking_doc.to_dict().get("reminderCount", 0) if reminder_tracking_doc.exists else 0
+                        current_date = datetime.now(timezone.utc)
 
-                        days_late = (current_date - due_date).days
+                        if current_date > due_date:
+                            # Get reminder count
+                            reminder_tracking_ref = __db.collection("student_reminder_tracking").document(f"{student['email']}_{assignment_doc.id}")
+                            reminder_tracking_doc = reminder_tracking_ref.get()
+                            reminder_count = reminder_tracking_doc.to_dict().get("reminderCount", 0) if reminder_tracking_doc.exists else 0
 
-                        late_missing_data.append({
-                            "type": "missing_submission",
-                            "studentName": student["name"],
-                            "studentEmail": student["email"],
-                            "assignmentId": assignment_doc.id,
-                            "assignmentTitle": assignment_data["title"],
-                            "className": class_data["name"],
-                            "dueDate": assignment_data["dueDate"],
-                            "daysLate": days_late,
-                            "reminderCount": reminder_count,
-                            "status": "missing"
-                        })
+                            days_late = (current_date - due_date).days
+
+                            late_missing_data.append({
+                                "type": "missing_submission",
+                                "studentName": student["name"],
+                                "studentEmail": student["email"],
+                                "assignmentId": assignment_doc.id,
+                                "assignmentTitle": assignment_data["title"],
+                                "className": class_data["name"],
+                                "dueDate": assignment_data["dueDate"],
+                                "daysLate": days_late,
+                                "reminderCount": reminder_count,
+                                "status": "missing"
+                            })
+                    except Exception as date_error:
+                        print(f"Date parsing error for missing submission: {date_error}")
+                        continue
 
         print(f"Found {len(late_missing_data)} late/missing submissions for class {class_id}")
 
@@ -584,7 +615,7 @@ async def get_late_submissions(class_id: str, current_user: str = Depends(get_cu
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Failed to fetch late submissions: {str(e)}")
 
-# Remove all the complex reminder group endpoints and replace with:
+
 
 @router.post("/teacher/events")
 async def create_event(event_data: dict, current_user: str = Depends(get_current_user)):

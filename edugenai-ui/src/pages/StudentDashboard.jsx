@@ -109,7 +109,7 @@ const StudentDashboard = () => {
             if (!studentEmail) return;
 
             // Fetch data in parallel for better performance
-            const [notificationsResponse, classesResponse] = await Promise.all([
+            const [notificationsResponse, classesResponse, submissionsResponse] = await Promise.all([
                 fetch(`http://localhost:8088/api/v1/student/notifications/${studentEmail}`),
                 fetch('http://localhost:8088/api/v1/student/classes', {
                     method: 'POST',
@@ -119,11 +119,12 @@ const StudentDashboard = () => {
                     body: JSON.stringify({
                         studentEmail: studentEmail
                     })
-                })
+                }),
+                fetch(`http://localhost:8088/api/v1/student/submissions/${studentEmail}`)
             ]);
 
             // Handle notifications response
-            let notificationsData = { notifications: [] };
+            let notificationsData = { notifications: [], unread_count: 0 };
             if (notificationsResponse.ok) {
                 notificationsData = await notificationsResponse.json();
             } else {
@@ -137,6 +138,14 @@ const StudentDashboard = () => {
                 studentClasses = classesData.classes || [];
             } else {
                 console.error('Failed to fetch classes:', classesResponse.status);
+            }
+
+            // Handle submissions response
+            let submissionsData = { submissions: [] };
+            if (submissionsResponse.ok) {
+                submissionsData = await submissionsResponse.json();
+            } else {
+                console.error('Failed to fetch submissions:', submissionsResponse.status);
             }
 
             // Fetch assignments for all classes in parallel
@@ -220,19 +229,6 @@ const StudentDashboard = () => {
                 }
             }
 
-            // Fetch student's submissions
-            let submissionsData = { submissions: [] };
-            try {
-                const submissionsResponse = await fetch(`http://localhost:8088/api/v1/student/submissions/${studentEmail}`);
-                if (submissionsResponse.ok) {
-                    submissionsData = await submissionsResponse.json();
-                } else {
-                    console.error('Failed to fetch submissions:', submissionsResponse.status);
-                }
-            } catch (submissionsError) {
-                console.error('Error fetching submissions:', submissionsError);
-            }
-
             // Calculate subject analytics
             const { strongestSubject, subjectsNeedAttention, averageGrade } = calculateSubjectAnalytics(subjectPerformance);
 
@@ -252,9 +248,10 @@ const StudentDashboard = () => {
                 // Existing data
                 papersAnalyzed: submissionsData.submissions.length,
                 recentPapers: getRecentPapers([], submissionsData.submissions),
-                notifications: notificationsData.notifications,
+                notifications: notificationsData.notifications || [],
                 studyActivities: getRecentStudyActivities(submissionsData.submissions, []),
-                tutorMessage: getPersonalizedTutorMessage(submissionsData.submissions)
+                tutorMessage: getPersonalizedTutorMessage(submissionsData.submissions),
+                notificationCount: notificationsData.unread_count || 0
             });
 
         } catch (err) {
@@ -796,7 +793,7 @@ const StudentDashboard = () => {
                                                                     <Typography variant="caption" color="text.secondary">
                                                                         {new Date(notification.createdAt).toLocaleDateString()} at {new Date(notification.createdAt).toLocaleTimeString()}
                                                                     </Typography>
-                                                                    {notification.message && notification.type !== 'reminder' && (
+                                                                    {notification.message && (
                                                                         <Typography variant="body2" sx={{ mt: 0.5 }}>
                                                                             {notification.message}
                                                                         </Typography>

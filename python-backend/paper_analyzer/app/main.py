@@ -26,7 +26,7 @@ app.include_router(test_router, prefix="/api/v1")
 app.include_router(export_router, prefix="/api/v1")
 app.include_router(gemini_router,prefix="/api/v1/gemini")
 app.include_router(feedback_router,prefix="/api/v1")
-app.include_router(student_router, prefix="/api/v1")
+app.include_router(student_router, prefix="/api/v1", tags=["students"])
 app.include_router(teacher_router, prefix="/api/v1")
 
 @app.get("/")
